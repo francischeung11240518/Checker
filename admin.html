@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>價錢管理</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --muted: #6b645c;
+    --paper: #f6f1e8;
+    --card: #fffdf8;
+    --line: #e4d9c8;
+    --green: #1f6b45;
+    --red: #9a3412;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.45;
+  }
+  main { max-width: 40rem; margin: 0 auto; padding: 1.1rem 1rem 3rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 0.35rem; }
+  h2 { font-size: 1.08rem; margin: 0 0 0.35rem; }
+  .note, .sub { margin: 0 0 0.8rem; color: var(--muted); font-size: 0.92rem; }
+  .nav, .filters { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0 0 0.85rem; }
+  button {
+    font: inherit;
+    font-size: 1rem;
+    min-height: 44px;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #efe6d6;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button[aria-pressed="true"] { background: var(--ink); color: #fffdf8; border-color: var(--ink); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 0 0 0.7rem;
+  }
+  .card.keep { border-color: var(--green); }
+  .card.no { opacity: 0.72; }
+  .card p { margin: 0.2rem 0; }
+  .shop { color: var(--muted); margin-top: 0; }
+  .k {
+    display: inline-block;
+    min-width: 4.6rem;
+    color: var(--muted);
+    font-size: 0.88rem;
+  }
+  .since, .price-note { color: var(--muted); font-size: 0.88rem; }
+  .state { font-size: 0.88rem; color: var(--green); }
+  .card.no .state { color: var(--red); }
+  .actions { display: flex; gap: 0.45rem; margin-top: 0.65rem; }
+  .actions button { flex: 1; }
+  .actions button[aria-pressed="true"][data-mark="keep"] { background: var(--green); border-color: var(--green); }
+  .actions button[aria-pressed="true"][data-mark="no"] { background: var(--red); border-color: var(--red); }
+  .facts { list-style: none; padding: 0; margin: 0; }
+  .facts li {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    margin: 0 0 0.6rem;
+  }
+  .empty { font-size: 1.05rem; }
+  #savewarn { color: var(--red); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>價錢管理</h1>
+  <p class="note">撳下面三部分。留低同唔係只記喺呢個瀏覽器，唔會上傳。再撳一次同一個掣就取消。</p>
+  <p id="savewarn" class="note" hidden>呢個瀏覽器未能儲存記號，撳完重新開頁就會冇。</p>
+  <div class="nav">
+    <button type="button" data-section-btn="offers" aria-pressed="true">今日優惠</button>
+    <button type="button" data-section-btn="shrink" aria-pressed="false">縮水例子</button>
+    <button type="button" data-section-btn="status" aria-pressed="false">資料狀況</button>
+  </div>
+  <div class="filters" id="filters">
+    <button type="button" data-filter-btn="all" aria-pressed="true">全部</button>
+    <button type="button" data-filter-btn="open" aria-pressed="false">未標記</button>
+    <button type="button" data-filter-btn="keep" aria-pressed="false">留低</button>
+    <button type="button" data-filter-btn="no" aria-pressed="false">唔係</button>
+  </div>
+  <section id="panel-offers" data-panel="offers">
+    <p class="sub">下面係 2026-10-09 最新價入面，你常用產品有優惠嘅 36 行。今日全庫有 2,581 個優惠。可口可樂 可樂 - 樽裝 2公升、可口可樂 可樂 - 罐裝 330毫升 x 12、獅球嘜 純正花生油 2公升，今日冇優惠，所以下面冇佢哋。「約」係按字句計，唔係消委會確認嘅最平價。</p>
+    <article class="card" data-id="offer:P000003479:AEON"><h2>Nonio 無口氣牙膏 - 清涼薄荷味 130克</h2><p class="shop">AEON</p><p><span class="k">標價</span>$32.9</p><p><span class="k">原文</span>買2件$44.90（Buy 2 at $44.90）</p><p><span class="k">搜尋頁</span>買2件共$44.9，約每件$22.45</p><p><span class="k">估計每件</span>$22.45</p><p class="since">由 2026-10-04 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000003479:JASONS"><h2>Nonio 無口氣牙膏 - 清涼薄荷味 130克</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$33</p><p><span class="k">原文</span>買2件$47.00（2 for $47.00）</p><p><span class="k">搜尋頁</span>買2件共$47，約每件$23.5</p><p><span class="k">估計每件</span>$23.5</p><p class="since">由 2026-09-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000003479:MANNINGS"><h2>Nonio 無口氣牙膏 - 清涼薄荷味 130克</h2><p class="shop">萬寧</p><p><span class="k">標價</span>$32.9</p><p><span class="k">原文</span>買2件$44.90（Buy 2 at $44.90）</p><p><span class="k">搜尋頁</span>買2件共$44.9，約每件$22.45</p><p><span class="k">估計每件</span>$22.45</p><p class="since">由 2026-08-01 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000003479:PARKNSHOP"><h2>Nonio 無口氣牙膏 - 清涼薄荷味 130克</h2><p class="shop">百佳</p><p><span class="k">標價</span>$24.9</p><p><span class="k">原文</span>買2件慳$4.90（Buy 2 to save $4.90）</p><p><span class="k">搜尋頁</span>買2件慳$4.9，約每件$22.45</p><p><span class="k">估計每件</span>$22.45</p><p class="since">由 2026-08-01 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000003479:WATSONS"><h2>Nonio 無口氣牙膏 - 清涼薄荷味 130克</h2><p class="shop">屈臣氏</p><p><span class="k">標價</span>$24.9</p><p><span class="k">原文</span>買2件只需$44.90（2 For $44.90）</p><p><span class="k">搜尋頁</span>買2件共$44.9，約每件$22.45</p><p><span class="k">估計每件</span>$22.45</p><p class="since">由 2026-07-30 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000003479:WELLCOME"><h2>Nonio 無口氣牙膏 - 清涼薄荷味 130克</h2><p class="shop">惠康</p><p><span class="k">標價</span>$33</p><p><span class="k">原文</span>買2件$44.90（2 for $44.90）</p><p><span class="k">搜尋頁</span>買2件共$44.9，約每件$22.45</p><p><span class="k">估計每件</span>$22.45</p><p class="since">由 2026-09-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000002423:JASONS"><h2>可口可樂 可樂 - 樽裝 500毫升</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$10.5</p><p><span class="k">原文</span>買2件$18.00（2 for $18.00）</p><p><span class="k">搜尋頁</span>買2件共$18，約每件$9</p><p><span class="k">估計每件</span>$9</p><p class="since">由 2026-09-25 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000002423:WATSONS"><h2>可口可樂 可樂 - 樽裝 500毫升</h2><p class="shop">屈臣氏</p><p><span class="k">標價</span>$11</p><p><span class="k">原文</span>買2件只需$18（2 For $18.00）</p><p><span class="k">搜尋頁</span>買2件共$18，約每件$9</p><p><span class="k">估計每件</span>$9</p><p class="since">由 2026-07-17 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000002423:WELLCOME"><h2>可口可樂 可樂 - 樽裝 500毫升</h2><p class="shop">惠康</p><p><span class="k">標價</span>$10</p><p><span class="k">原文</span>買2件$18.00（2 for $18.00）</p><p><span class="k">搜尋頁</span>買2件共$18，約每件$9</p><p><span class="k">估計每件</span>$9</p><p class="since">由 2026-09-25 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000823:AEON"><h2>可口可樂 可樂 - 樽裝 1.25公升</h2><p class="shop">AEON</p><p><span class="k">標價</span>$11.9</p><p><span class="k">原文</span>買3件$30.00（Buy 3 at $30.00）</p><p><span class="k">搜尋頁</span>買3件共$30，約每件$10</p><p><span class="k">估計每件</span>$10</p><p class="since">由 2026-10-02 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000823:PARKNSHOP"><h2>可口可樂 可樂 - 樽裝 1.25公升</h2><p class="shop">百佳</p><p><span class="k">標價</span>$14</p><p><span class="k">原文</span>買3件慳$17.00（Buy 3 to save $17.00）</p><p><span class="k">搜尋頁</span>買3件慳$17，約每件$8.33</p><p><span class="k">估計每件</span>$8.33</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000515:AEON"><h2>可口可樂 可樂 - 罐裝 330毫升 x 8</h2><p class="shop">AEON</p><p><span class="k">標價</span>$38</p><p><span class="k">原文</span>買2件$54.00（Buy 2 at $54.00）</p><p><span class="k">搜尋頁</span>買2件共$54，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-09-25 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000515:JASONS"><h2>可口可樂 可樂 - 罐裝 330毫升 x 8</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件$54.00（2 for $54.00）</p><p><span class="k">搜尋頁</span>買2件共$54，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000515:PARKNSHOP"><h2>可口可樂 可樂 - 罐裝 330毫升 x 8</h2><p class="shop">百佳</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件慳$26.00（Buy 2 to save $26.00）</p><p><span class="k">搜尋頁</span>買2件慳$26，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000515:WATSONS"><h2>可口可樂 可樂 - 罐裝 330毫升 x 8</h2><p class="shop">屈臣氏</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件$56.00（Buy 2 at $56.00）</p><p><span class="k">搜尋頁</span>買2件共$56，約每件$28</p><p><span class="k">估計每件</span>$3.5（$28 除 8）</p><p class="since">由 2026-07-17 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000515:WELLCOME"><h2>可口可樂 可樂 - 罐裝 330毫升 x 8</h2><p class="shop">惠康</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件$54.00（2 for $54.00）</p><p><span class="k">搜尋頁</span>買2件共$54，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000282:JASONS"><h2>卡樂B 熱浪香辣味薯片 105克</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$23</p><p><span class="k">原文</span>買2件$37.00（2 for $37.00）</p><p><span class="k">搜尋頁</span>買2件共$37，約每件$18.5</p><p><span class="k">估計每件</span>$18.5</p><p class="since">由 2026-09-19 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000282:PARKNSHOP"><h2>卡樂B 熱浪香辣味薯片 105克</h2><p class="shop">百佳</p><p><span class="k">標價</span>$22</p><p><span class="k">原文</span>買2件慳$5.00（Buy 2 to save $5.00）</p><p><span class="k">搜尋頁</span>買2件慳$5，約每件$19.5</p><p><span class="k">估計每件</span>$19.5</p><p class="since">由 2026-10-03 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000282:WELLCOME"><h2>卡樂B 熱浪香辣味薯片 105克</h2><p class="shop">惠康</p><p><span class="k">標價</span>$22</p><p><span class="k">原文</span>買2件$37.00（2 for $37.00）</p><p><span class="k">搜尋頁</span>買2件共$37，約每件$18.5</p><p><span class="k">估計每件</span>$18.5</p><p class="since">由 2026-09-19 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000004959:JASONS"><h2>農心 辛辣麵 120克 x 5</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$28</p><p><span class="k">原文</span>買2件$40.00（2 for $40.00）</p><p><span class="k">搜尋頁</span>買2件共$40，約每件$20</p><p><span class="k">估計每件</span>$4（$20 除 5）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000004959:PARKNSHOP"><h2>農心 辛辣麵 120克 x 5</h2><p class="shop">百佳</p><p><span class="k">標價</span>$28</p><p><span class="k">原文</span>買2件慳$9.00（Buy 2 to save $9.00）</p><p><span class="k">搜尋頁</span>買2件慳$9，約每件$23.5</p><p><span class="k">估計每件</span>$4.7（$23.5 除 5）</p><p class="since">由 2026-10-03 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000004959:WELLCOME"><h2>農心 辛辣麵 120克 x 5</h2><p class="shop">惠康</p><p><span class="k">標價</span>$28</p><p><span class="k">原文</span>買2件$40.00（2 for $40.00）</p><p><span class="k">搜尋頁</span>買2件共$40，約每件$20</p><p><span class="k">估計每件</span>$4（$20 除 5）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000945:JASONS"><h2>樂天 小熊餅 - 朱古力味 37克</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$14.9</p><p><span class="k">原文</span>買2件$20.80（2 for $20.80）</p><p><span class="k">搜尋頁</span>買2件共$20.8，約每件$10.4</p><p><span class="k">估計每件</span>$10.4</p><p class="since">由 2026-10-03 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000945:PARKNSHOP"><h2>樂天 小熊餅 - 朱古力味 37克</h2><p class="shop">百佳</p><p><span class="k">標價</span>$13</p><p><span class="k">原文</span>買2件慳$4.00（Buy 2 to save $4.00）</p><p><span class="k">搜尋頁</span>買2件慳$4，約每件$11</p><p><span class="k">估計每件</span>$11</p><p class="since">由 2026-06-13 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000945:WELLCOME"><h2>樂天 小熊餅 - 朱古力味 37克</h2><p class="shop">惠康</p><p><span class="k">標價</span>$14.5</p><p><span class="k">原文</span>買2件$20.00（2 for $20.00）</p><p><span class="k">搜尋頁</span>買2件共$20，約每件$10</p><p><span class="k">估計每件</span>$10</p><p class="since">由 2026-09-05 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000001122:AEON"><h2>樂天 小熊餅 - 朱古力味 - 家庭裝 195克</h2><p class="shop">AEON</p><p><span class="k">標價</span>$25.9</p><p><span class="k">原文</span>買3件$70.00（Buy 3 at $70.00）</p><p><span class="k">搜尋頁</span>買3件共$70，約每件$23.33</p><p><span class="k">估計每件</span>$23.33</p><p class="since">由 2026-10-04 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000001672:AEON"><h2>樂天 小熊餅 - 士多啤梨味 - 家庭裝 195克</h2><p class="shop">AEON</p><p><span class="k">標價</span>$25.9</p><p><span class="k">原文</span>買3件$70.00（Buy 3 at $70.00）</p><p><span class="k">搜尋頁</span>買3件共$70，約每件$23.33</p><p><span class="k">估計每件</span>$23.33</p><p class="since">由 2026-10-04 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000003363:PARKNSHOP"><h2>Movenpick 雲呢拿夢幻雪糕 500毫升</h2><p class="shop">百佳</p><p><span class="k">標價</span>$80</p><p><span class="k">原文</span>買2件慳$30.00（Buy 2 to save $30.00）</p><p><span class="k">搜尋頁</span>買2件慳$30，約每件$65</p><p><span class="k">估計每件</span>$65</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000005040:JASONS"><h2>唯潔雅 極致綿柔4層衛生紙 10卷</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$41</p><p><span class="k">原文</span>買2件$59.90（2 for $59.90）</p><p><span class="k">搜尋頁</span>買2件共$59.9，約每件$29.95</p><p><span class="k">估計每件</span>$29.95</p><p class="since">由 2026-09-25 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000005040:PARKNSHOP"><h2>唯潔雅 極致綿柔4層衛生紙 10卷</h2><p class="shop">百佳</p><p><span class="k">標價</span>$40.9</p><p><span class="k">原文</span>Buy 3 to save $35.70（Buy 3 to save $35.70）</p><p><span class="k">搜尋頁</span>買3件慳$35.7，約每件$29</p><p><span class="k">估計每件</span>$29</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000005040:WELLCOME"><h2>唯潔雅 極致綿柔4層衛生紙 10卷</h2><p class="shop">惠康</p><p><span class="k">標價</span>$41</p><p><span class="k">原文</span>買2件$59.90（2 for $59.90）</p><p><span class="k">搜尋頁</span>買2件共$59.9，約每件$29.95</p><p><span class="k">估計每件</span>$29.95</p><p class="since">由 2026-09-25 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000413:AEON"><h2>可口可樂 零系可樂 Zero - 罐裝 330毫升 x 8</h2><p class="shop">AEON</p><p><span class="k">標價</span>$38</p><p><span class="k">原文</span>買2件$54.00（Buy 2 at $54.00）</p><p><span class="k">搜尋頁</span>買2件共$54，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-09-25 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000413:JASONS"><h2>可口可樂 零系可樂 Zero - 罐裝 330毫升 x 8</h2><p class="shop">Market Place</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件$54.00（2 for $54.00）</p><p><span class="k">搜尋頁</span>買2件共$54，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000413:PARKNSHOP"><h2>可口可樂 零系可樂 Zero - 罐裝 330毫升 x 8</h2><p class="shop">百佳</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件慳$26.00（Buy 2 to save $26.00）</p><p><span class="k">搜尋頁</span>買2件慳$26，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000413:WATSONS"><h2>可口可樂 零系可樂 Zero - 罐裝 330毫升 x 8</h2><p class="shop">屈臣氏</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件$56.00（Buy 2 at $56.00）</p><p><span class="k">搜尋頁</span>買2件共$56，約每件$28</p><p><span class="k">估計每件</span>$3.5（$28 除 8）</p><p class="since">由 2026-07-17 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="offer:P000000413:WELLCOME"><h2>可口可樂 零系可樂 Zero - 罐裝 330毫升 x 8</h2><p class="shop">惠康</p><p><span class="k">標價</span>$40</p><p><span class="k">原文</span>買2件$54.00（2 for $54.00）</p><p><span class="k">搜尋頁</span>買2件共$54，約每件$27</p><p><span class="k">估計每件</span>$3.375（$27 除 8）</p><p class="since">由 2026-10-09 起</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+    <p class="empty" hidden>呢個篩選未有紀錄。</p>
+  </section>
+  <section id="panel-shrink" data-panel="shrink" hidden>
+    <p class="sub">下面係最清晰嘅 50 個容量變細例子。包裝細咗之後，價錢可以不變、升或者跌。日期係抽樣先見到新名嗰日，唔係確實改包裝嗰日。</p>
+    <article class="card" data-id="shrink:P000000057:2024-05-15:250:175"><h2>家樂氏 香甜玉米片 (粟米片) Frosties 175克</h2><p><span class="k">舊容量</span>250克</p><p><span class="k">新容量</span>175克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-05-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001929:2020-12-15:140:100"><h2>雀巢牛奶公司 高鈣低脂鮮果乳酪 - 士多啤梨 100克 x 3</h2><p><span class="k">舊容量</span>140克</p><p><span class="k">新容量</span>100克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2020-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003804:2024-10-15:720:540"><h2>御品皇 韮菜豬肉水餃 540克</h2><p><span class="k">舊容量</span>720克</p><p><span class="k">新容量</span>540克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-10-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003805:2024-10-15:720:540"><h2>御品皇 白菜豬肉水餃 540克</h2><p><span class="k">舊容量</span>720克</p><p><span class="k">新容量</span>540克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-10-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000004438:2024-10-15:720:540"><h2>御品皇 白菜木耳豬肉水餃 540克</h2><p><span class="k">舊容量</span>720克</p><p><span class="k">新容量</span>540克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-10-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002523:2024-05-15:250:190"><h2>菲力費城 芝味醬 (軟忌廉芝士) - 原味 190克</h2><p><span class="k">舊容量</span>250克</p><p><span class="k">新容量</span>190克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-05-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003431:2026-07-15:45:35"><h2>百邦 迷你輕鹽味薯片 35克</h2><p><span class="k">舊容量</span>45克</p><p><span class="k">新容量</span>35克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2026-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003557:2026-09-15:90:70"><h2>UCC 即溶咖啡 114 70克</h2><p><span class="k">舊容量</span>90克</p><p><span class="k">新容量</span>70克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2026-09-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002353:2025-08-15:185:144"><h2>百勝廚 新加坡叻沙拉麵 144克</h2><p><span class="k">舊容量</span>185克</p><p><span class="k">新容量</span>144克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-08-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001239:2021-07-15:250:200"><h2>三花牌 10條裝熱狗腸 (純豬肉腸) 200克</h2><p><span class="k">舊容量</span>250克</p><p><span class="k">新容量</span>200克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2021-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003064:2021-12-15:250:200"><h2>哈瑞寶 迷你熊仔橡皮糖 200克</h2><p><span class="k">舊容量</span>250克</p><p><span class="k">新容量</span>200克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2021-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000004848:2024-08-15:156:125"><h2>美國雅兒 高效除紋按摩膏 125克</h2><p><span class="k">舊容量</span>156克</p><p><span class="k">新容量</span>125克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-08-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001462:2024-05-15:340:275"><h2>家樂氏 原味玉米片 (粟米片) Classic Corn Flakes 275克</h2><p><span class="k">舊容量</span>340克</p><p><span class="k">新容量</span>275克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-05-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001933:2022-07-15:185:150"><h2>雄雞標 礦泉水浸吞拿魚塊 150克</h2><p><span class="k">舊容量</span>185克</p><p><span class="k">新容量</span>150克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2022-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002339:2023-06-15:143:118"><h2>固力果 Pretz 百力滋沙律餅乾條 9包 118克</h2><p><span class="k">舊容量</span>143克</p><p><span class="k">新容量</span>118克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-06-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003284:2024-05-15:50:42"><h2>森永 牛奶朱古力 42克</h2><p><span class="k">舊容量</span>50克</p><p><span class="k">新容量</span>42克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-05-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000848:2023-11-15:105:90"><h2>卡樂B 蝦條 (原味) 90克</h2><p><span class="k">舊容量</span>105克</p><p><span class="k">新容量</span>90克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-11-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000101:2024-10-15:140:120"><h2>珍珍 燒烤味薯片 120克</h2><p><span class="k">舊容量</span>140克</p><p><span class="k">新容量</span>120克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-10-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000432:2024-06-15:38:33"><h2>百邦 Ebi 迷你蝦餅 (條裝) 33克</h2><p><span class="k">舊容量</span>38克</p><p><span class="k">新容量</span>33克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-06-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000298:2026-06-15:122:106"><h2>公仔 碗麵 - 日式豬骨濃湯味 106克</h2><p><span class="k">舊容量</span>122克</p><p><span class="k">新容量</span>106克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2026-06-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002679:2023-12-15:200:175"><h2>高露潔 三重功效牙膏 175克 x 3</h2><p><span class="k">舊容量</span>200克</p><p><span class="k">新容量</span>175克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000115:2024-07-15:176:154"><h2>麥維他 Club 朱古力夾心橙餅 7件裝 154克</h2><p><span class="k">舊容量</span>176克</p><p><span class="k">新容量</span>154克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000004868:2025-12-15:32:28"><h2>小老板 脆紫菜 (辣香味) 28克</h2><p><span class="k">舊容量</span>32克</p><p><span class="k">新容量</span>28克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003349:2026-07-15:40:35"><h2>Be-Kind 海鹽楓糖核桃堅果棒 35克</h2><p><span class="k">舊容量</span>40克</p><p><span class="k">新容量</span>35克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2026-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000759:2020-11-15:205:180"><h2>灣仔碼頭 北京水餃 - 白菜豬肉 180克</h2><p><span class="k">舊容量</span>205克</p><p><span class="k">新容量</span>180克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2020-11-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000760:2020-11-15:205:180"><h2>灣仔碼頭 北京水餃 - 西洋菜豬肉 180克</h2><p><span class="k">舊容量</span>205克</p><p><span class="k">新容量</span>180克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2020-11-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001094:2020-07-29:454:400"><h2>太古 金黃片糖 400克</h2><p><span class="k">舊容量</span>454克</p><p><span class="k">新容量</span>400克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2020-07-29 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000044:2025-08-15:340:300"><h2>地捫 茄汁 300克</h2><p><span class="k">舊容量</span>340克</p><p><span class="k">新容量</span>300克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-08-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000250:2025-07-15:1000:850"><h2>利賓納 濃縮黑加侖子飲品 - 原味 850毫升</h2><p><span class="k">舊容量</span>1000毫升</p><p><span class="k">新容量</span>850毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002555:2025-08-15:300:266"><h2>麥維他 牛奶朱古力消化餅 266克</h2><p><span class="k">舊容量</span>300克</p><p><span class="k">新容量</span>266克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-08-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002556:2025-08-15:300:266"><h2>麥維他 黑朱古力消化餅 266克</h2><p><span class="k">舊容量</span>300克</p><p><span class="k">新容量</span>266克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-08-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003232:2021-12-15:45:40"><h2>利口樂 潤喉糖 - 檸檬香草 40克</h2><p><span class="k">舊容量</span>45克</p><p><span class="k">新容量</span>40克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2021-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003656:2021-12-15:36:32"><h2>樂天 杏仁朱古力餅棒 32克</h2><p><span class="k">舊容量</span>36克</p><p><span class="k">新容量</span>32克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2021-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000431:2023-08-15:45:40"><h2>百邦 迷你芝士夾心餅 (條裝) 40克</h2><p><span class="k">舊容量</span>45克</p><p><span class="k">新容量</span>40克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-08-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003486:2025-04-15:90:80"><h2>雀巢 曲奇忌廉雪糕批 80毫升 x 4</h2><p><span class="k">舊容量</span>90毫升</p><p><span class="k">新容量</span>80毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-04-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002116:2025-12-15:900:800"><h2>子母 即溶全脂奶粉 800克</h2><p><span class="k">舊容量</span>900克</p><p><span class="k">新容量</span>800克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-12-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000859:2024-02-15:74:66"><h2>寶礦力水特 電解質補充飲料 - 沖劑 66克 x 5</h2><p><span class="k">舊容量</span>74克</p><p><span class="k">新容量</span>66克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-02-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000000300:2026-07-15:103:92"><h2>公仔麵 - 雞蓉味 92克 x 5</h2><p><span class="k">舊容量</span>103克</p><p><span class="k">新容量</span>92克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2026-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001578:2024-07-15:236:198"><h2>舒適 Hydro 防敏剃鬚o者喱泡 198克</h2><p><span class="k">舊容量</span>236克</p><p><span class="k">新容量</span>198克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001844:2025-05-15:95:85"><h2>趣多多 碎朱古力曲奇餅 85克</h2><p><span class="k">舊容量</span>95克</p><p><span class="k">新容量</span>85克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2025-05-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002220:2023-11-15:88:79"><h2>明治 杏仁朱古力 79克</h2><p><span class="k">舊容量</span>88克</p><p><span class="k">新容量</span>79克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-11-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000001605:2024-07-15:133:119.6"><h2>奧利奧 夾心曲奇 119.6克</h2><p><span class="k">舊容量</span>133克</p><p><span class="k">新容量</span>119.6克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002882:2023-07-15:150:135"><h2>蕊娜 制汗爽身噴霧 - 清新舒棉 Cotton Dry 135毫升</h2><p><span class="k">舊容量</span>150毫升</p><p><span class="k">新容量</span>135毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002989:2023-07-15:150:135"><h2>多芬 止汗壓縮噴霧 - 經典香味 Original 135毫升</h2><p><span class="k">舊容量</span>150毫升</p><p><span class="k">新容量</span>135毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003550:2023-07-15:150:135"><h2>多芬 止汗壓縮噴霧 - 輕柔嫩肌 135毫升</h2><p><span class="k">舊容量</span>150毫升</p><p><span class="k">新容量</span>135毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003551:2023-07-15:150:135"><h2>蕊娜 制汗爽身噴霧 - 沐浴舒爽 135毫升</h2><p><span class="k">舊容量</span>150毫升</p><p><span class="k">新容量</span>135毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-07-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002688:2023-09-15:100:90"><h2>牙齦適 牙齦護理牙膏 (原味配方) 90克</h2><p><span class="k">舊容量</span>100克</p><p><span class="k">新容量</span>90克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2023-09-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000002968:2024-01-15:50:45"><h2>蕊娜 女士止汗香體露 (走珠) - 清新舒棉 45毫升</h2><p><span class="k">舊容量</span>50毫升</p><p><span class="k">新容量</span>45毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-01-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003548:2024-01-15:50:45"><h2>蕊娜 女士止汗香體露 (走珠) - 沐浴舒爽 45毫升</h2><p><span class="k">舊容量</span>50毫升</p><p><span class="k">新容量</span>45毫升</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-01-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+<article class="card" data-id="shrink:P000003808:2024-10-15:600:540"><h2>御品皇 韮菜豬肉煎餃 540克</h2><p><span class="k">舊容量</span>600克</p><p><span class="k">新容量</span>540克</p><p class="price-note">價錢可以不變、升或者跌。</p><p class="since">2024-10-15 先喺抽樣見到新容量</p><p class="state">未標記</p><div class="actions"><button type="button" data-mark="keep">留低</button><button type="button" data-mark="no">唔係</button></div></article>
+    <p class="empty" hidden>呢個篩選未有紀錄。</p>
+  </section>
+  <section id="panel-status" data-panel="status" hidden>
+    <ul class="facts">
+      <li>產品：4,001 款。最新 2026-10-09 有 2,748 款。</li>
+      <li>價格行：1,013,347 行。同一超市、價錢同優惠冇變就合併做一行。最新一日有 7,861 行。</li>
+      <li>常用產品走勢圖大約每星期一個價，由 2024-01 到 2026-10-09，唔係每日價。其他產品仍然係抽樣價。</li>
+      <li>數據來自消費者委員會網上價格一覽通，只供私人試用。</li>
+    </ul>
+  </section>
+</main>
+<script>
+
+const KEY = "pricewatch-admin-marks";
+function loadMarks() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === "object" ? obj : {};
+  } catch (e) {
+    return {};
+  }
+}
+function saveMarks(marks) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(marks));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+let marks = loadMarks();
+let section = "offers";
+let filter = "all";
+function apply() {
+  document.querySelectorAll("[data-section-btn]").forEach((btn) => {
+    const on = btn.getAttribute("data-section-btn") === section;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  document.querySelectorAll("[data-panel]").forEach((panel) => {
+    panel.hidden = panel.getAttribute("data-panel") !== section;
+  });
+  const filters = document.getElementById("filters");
+  filters.hidden = section === "status";
+  document.querySelectorAll("[data-filter-btn]").forEach((btn) => {
+    const on = btn.getAttribute("data-filter-btn") === filter;
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  const cards = document.querySelectorAll("#panel-" + section + " [data-id]");
+  let shown = 0;
+  cards.forEach((card) => {
+    const id = card.getAttribute("data-id");
+    const mark = marks[id] || "";
+    card.classList.toggle("keep", mark === "keep");
+    card.classList.toggle("no", mark === "no");
+    card.querySelectorAll("[data-mark]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", mark === btn.getAttribute("data-mark") ? "true" : "false");
+    });
+    const state = card.querySelector(".state");
+    if (state) state.textContent = mark === "keep" ? "已留低" : mark === "no" ? "已標唔係" : "未標記";
+    let visible = true;
+    if (filter === "keep") visible = mark === "keep";
+    else if (filter === "no") visible = mark === "no";
+    else if (filter === "open") visible = !mark;
+    card.hidden = !visible;
+    if (visible) shown += 1;
+  });
+  const empty = document.querySelector("#panel-" + section + " .empty");
+  if (empty) {
+    if (!cards.length) empty.textContent = "呢度未有紀錄。";
+    else empty.textContent = "呢個篩選未有紀錄。";
+    empty.hidden = cards.length > 0 && shown > 0;
+  }
+}
+document.body.addEventListener("click", (ev) => {
+  const sec = ev.target.closest("[data-section-btn]");
+  if (sec) {
+    section = sec.getAttribute("data-section-btn");
+    apply();
+    return;
+  }
+  const fil = ev.target.closest("[data-filter-btn]");
+  if (fil) {
+    filter = fil.getAttribute("data-filter-btn");
+    apply();
+    return;
+  }
+  const mk = ev.target.closest("[data-mark]");
+  if (!mk) return;
+  const card = mk.closest("[data-id]");
+  if (!card) return;
+  const id = card.getAttribute("data-id");
+  const m = mk.getAttribute("data-mark");
+  if (marks[id] === m) delete marks[id];
+  else marks[id] = m;
+  const ok = saveMarks(marks);
+  const warn = document.getElementById("savewarn");
+  warn.hidden = ok;
+  apply();
+});
+apply();
+
+</script>
+</body>
+</html>
