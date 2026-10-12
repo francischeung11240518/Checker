@@ -134,6 +134,49 @@
   .now-block .price .shelf-main { font-weight: 650; }
   .now-block .price .offer { margin-top: 0.18rem; }
 
+  .entry-row { margin: 0 0 0.85rem; }
+  a.report-entry, a.report-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 650;
+    font-size: 0.95rem;
+  }
+  a.report-entry {
+    background: #1f6b45;
+    color: #fffdf8;
+    border: 2px solid #145334;
+  }
+  a.report-link {
+    background: #efe6d6;
+    color: #1c1915;
+    border: 1px solid #e4d9c8;
+    margin: 0.45rem 0 0;
+  }
+  .price.user-report {
+    background: #fff6e8;
+    border: 1px dashed #c2412d;
+    color: var(--ink);
+  }
+  .now-block .price.user-report {
+    background: #fff6e8;
+    border: 1px dashed #c2412d;
+  }
+  .user-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #9a3412;
+    background: #fde8d8;
+    border-radius: 999px;
+    padding: 0.02rem 0.4rem;
+    margin-right: 0.2rem;
+  }
+
   button.card, button.card-hit {
     display: block;
     width: 100%;
@@ -726,6 +769,7 @@
 </aside>
 <main>
   <h1>超市產品搜尋</h1>
+  <p class="entry-row"><a class="report-entry" href="report.html">我要上報</a></p>
   <p class="note">數據來自消費者委員會網上價格一覽通，只供私人試用，價格為網上價。優惠有「約」字係按字句估算，唔係委員會確認嘅最平價。</p>
   <button type="button" id="openSide" class="open-side" aria-expanded="false" aria-controls="side" aria-haspopup="dialog"><span class="menu-ico" aria-hidden="true">☰</span><span>瀏覽分類</span><span class="menu-caret" aria-hidden="true">▾</span></button>
   <div class="search">
@@ -3176,5 +3220,8 @@ boot();
 
 
 </script>
+<script src="report-shared.js"></script>
+<script src="report-store.js"></script>
+<script src="report-public.js"></script>
 </body>
 </html>
