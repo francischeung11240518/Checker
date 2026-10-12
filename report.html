@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>上報價錢</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --muted: #6b645c;
+    --paper: #f6f1e8;
+    --card: #fffdf8;
+    --line: #e4d9c8;
+    --red: #c2412d;
+    --green: #1f6b45;
+    --chip: #efe6d6;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.45;
+  }
+  main { max-width: 40rem; margin: 0 auto; padding: 1.1rem 1rem 3rem; }
+  h1 { font-size: 1.55rem; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.2rem; margin: 0 0 0.55rem; }
+  .note, .sub { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.92rem; }
+  .banner {
+    background: #fff6e8;
+    border: 1px dashed #c2412d;
+    border-radius: 14px;
+    padding: 0.7rem 0.8rem;
+    margin: 0 0 0.8rem;
+    font-size: 0.92rem;
+  }
+  .warn { color: #9a3412; font-weight: 650; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 0 0 0.75rem;
+  }
+  button, .linkish {
+    font: inherit;
+    font-size: 1rem;
+    min-height: 48px;
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--chip);
+    color: var(--ink);
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+  button.primary {
+    background: var(--green);
+    color: #fffdf8;
+    border: 2px solid #145334;
+    font-weight: 700;
+  }
+  button.ghost { background: transparent; }
+  button[aria-pressed="true"] {
+    background: #e5f4ea;
+    border-color: var(--green);
+    font-weight: 700;
+  }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus, a:focus, input:focus { outline: 3px solid #f0c36a; }
+  .stack { display: flex; flex-direction: column; gap: 0.5rem; }
+  .stack.row { flex-direction: row; }
+  .stack.row > * { flex: 1; }
+  .choices { display: flex; flex-direction: column; gap: 0.45rem; margin: 0 0 0.8rem; }
+  .choices > button, .stack > button, .stack > .linkish { width: 100%; }
+  .stack.row > button, .stack.row > .linkish { width: auto; }
+  label.choice {
+    display: flex;
+    gap: 0.55rem;
+    align-items: flex-start;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 0.75rem 0.8rem;
+    font-weight: 650;
+  }
+  label.choice input { width: 1.2rem; height: 1.2rem; margin-top: 0.15rem; flex: none; }
+  label.field { display: block; margin: 0 0 0.7rem; font-weight: 650; }
+  label.field span.hint, .hint {
+    display: block;
+    font-weight: 450;
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin-top: 0.15rem;
+  }
+  input[type="text"], input[type="search"], textarea, select {
+    width: 100%;
+    font: inherit;
+    font-size: 1.05rem;
+    margin-top: 0.3rem;
+    padding: 0.7rem 0.8rem;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    background: white;
+  }
+  textarea { min-height: 4.2rem; resize: vertical; }
+  .file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  img.preview {
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    background: #1c1915;
+    border-radius: 14px;
+    margin: 0 0 0.7rem;
+  }
+  .picks { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.4rem 0 0.7rem; }
+  .picks button { justify-content: flex-start; text-align: left; border-radius: 12px; background: white; }
+  .summary {
+    background: #f7f3ea;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 0.75rem 0.8rem;
+    margin: 0 0 0.8rem;
+  }
+  .summary p { margin: 0.25rem 0; }
+  .k { color: var(--muted); display: inline-block; min-width: 4.6rem; font-size: 0.88rem; }
+  .mine-card { margin-bottom: 0.6rem; }
+  .status { font-weight: 700; color: var(--green); }
+  .status.wait { color: #9a3412; }
+  .tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #9a3412;
+    background: #fde8d8;
+    border-radius: 999px;
+    padding: 0.05rem 0.45rem;
+  }
+  .clock { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <h1>上報價錢</h1>
+  <p class="banner">私人試用／本機暫存。上報同相片只留喺呢部機、呢個瀏覽器，唔會上傳。換電話或清網站資料就會冇。公開頁唔顯示原圖。</p>
+  <p id="progress" class="note"></p>
+  <p id="saveError" class="warn" hidden></p>
+  <p id="returnBanner" class="banner" hidden></p>
+
+  <section data-step="consent" hidden>
+    <h2>先同意先用</h2>
+    <div class="card">
+      <p>用呢張相核對同改善格價。系統會喺你部機做文字辨識，幫手填草稿。你核對之後先提交，管理員過關先公開。</p>
+      <p>原圖只短留喺呢部機做審核。公開預設只顯示店、貨、價同時間，唔顯示相。我哋唔會當廣告用你張相。</p>
+      <p>請只影貨架價牌。唔好影到人面、職員、小朋友或者會員卡。如果影收據，請遮住電話、會員編號、地址同付款碼。</p>
+    </div>
+    <label class="choice"><input type="checkbox" id="agree">我明白並同意</label>
+    <div class="stack">
+      <button type="button" class="primary" id="consentNext" disabled>下一步</button>
+      <a class="linkish" href="index.html">取消</a>
+    </div>
+  </section>
+
+  <section data-step="shop" hidden>
+    <h2>揀超市</h2>
+    <p class="sub">先揀店，之後影價牌會易啲對。分店可以唔填。</p>
+    <div id="returnedBanner" class="banner" hidden></div>
+    <div id="shopList" class="choices"></div>
+    <label class="field">分店（可跳過）
+      <input id="branchInput" type="text" maxlength="40" autocomplete="off" placeholder="例如銅鑼灣">
+    </label>
+    <div class="stack">
+      <button type="button" class="primary" id="shopNext" disabled>下一步</button>
+      <button type="button" id="openMine" class="ghost">我的上報</button>
+      <a class="linkish" href="index.html">返回搜尋</a>
+    </div>
+  </section>
+
+  <section data-step="photo" hidden>
+    <h2>影價牌</h2>
+    <p class="sub">靠近一隻貨、價錢要清楚、避免反光。</p>
+    <div class="stack row" style="margin-bottom:0.7rem">
+      <button type="button" id="kindShelf" aria-pressed="true">價牌</button>
+      <button type="button" id="kindReceipt" aria-pressed="false">收據（次選）</button>
+    </div>
+    <p id="receiptTip" class="banner" hidden>影收據請遮住會員號、電話、地址同付款碼。公開頁唔會顯示收據原圖。</p>
+    <div class="stack">
+      <button type="button" class="primary" id="takePhoto">影價牌</button>
+      <button type="button" id="pickPhoto">相簿上傳</button>
+      <button type="button" id="photoBack">返回</button>
+    </div>
+    <input id="camInput" class="file-input" type="file" accept="image/*" capture="environment">
+    <input id="libInput" class="file-input" type="file" accept="image/*">
+  </section>
+
+  <section data-step="preview" hidden>
+    <h2>睇下張相</h2>
+    <img id="previewImg" class="preview" alt="價牌預覽，只留喺呢部機">
+    <p class="sub">價錢同產品名要睇得清。如果影到人或者會員卡，請重拍。</p>
+    <div class="stack">
+      <button type="button" class="primary" id="usePhoto">用呢張</button>
+      <button type="button" id="retake">重拍</button>
+    </div>
+  </section>
+
+  <section data-step="reading" hidden>
+    <h2>讀相中</h2>
+    <p id="ocrStatus" class="card">準備讀相…</p>
+    <p class="sub">讀唔到都可以自己填，唔使等。</p>
+    <button type="button" id="skipOcr">讀唔到，自己填</button>
+  </section>
+
+  <section data-step="warn" hidden>
+    <h2>請檢查張相</h2>
+    <p id="warnText" class="banner"></p>
+    <div class="stack">
+      <button type="button" class="primary" id="warnRetake">重拍</button>
+      <button type="button" id="warnContinue">我已遮好，繼續</button>
+    </div>
+  </section>
+
+  <section data-step="confirm" hidden>
+    <h2>核對草稿</h2>
+    <p class="banner" id="draftNote">以下係系統讀相結果，請改到啱先提交。</p>
+    <p id="shopHint" class="warn" hidden></p>
+    <p class="note">超市：<b id="confirmShop"></b>　<button type="button" id="changeShop">改超市</button></p>
+    <label class="field">搜尋站內產品
+      <span class="hint">產品名多數要你撳一下揀。讀相只係草稿。</span>
+      <input id="productSearch" type="search" autocomplete="off" placeholder="打品牌或產品名">
+    </label>
+    <div id="productResults" class="picks"></div>
+    <p id="pickedLine" hidden></p>
+    <label class="choice"><input type="checkbox" id="newProduct">庫入面搵唔到</label>
+    <label class="field" id="newNameWrap" hidden>新貨名稱
+      <input id="newName" type="text" maxlength="80" autocomplete="off" placeholder="你見到嘅產品名">
+    </label>
+    <label class="field">規格（容量／件數）
+      <input id="specInput" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <label class="field">價錢
+      <span class="hint" id="priceHint">請核對價錢。</span>
+      <input id="priceInput" type="text" inputmode="decimal" autocomplete="off" placeholder="例如 12.9">
+    </label>
+    <label class="field">優惠寫法（可留空）
+      <span class="hint">系統解讀，請核對。例如買2件$54。</span>
+      <input id="offerInput" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <p class="note" style="margin-bottom:0.35rem">單位</p>
+    <div class="stack row" id="unitRow" style="margin-bottom:0.7rem"></div>
+    <p class="note" style="margin-bottom:0.35rem">邊種價</p>
+    <div class="choices" id="kindRow"></div>
+    <label class="field">備註（可留空，好短）
+      <input id="noteInput" type="text" maxlength="40" autocomplete="off">
+    </label>
+    <p id="ccHint" class="card"></p>
+    <p id="formError" class="warn" hidden></p>
+    <div class="stack">
+      <button type="button" class="primary" id="toSummary">睇摘要</button>
+      <button type="button" id="backPhoto">返回改相</button>
+    </div>
+  </section>
+
+  <section data-step="summary" hidden>
+    <h2>再睇一次</h2>
+    <img id="summaryImg" class="preview" alt="你提交嘅價牌，只留喺呢部機">
+    <p class="sub">張相只供你同管理員喺呢部機核對，公開唔會顯示。</p>
+    <div id="summaryBox" class="summary"></div>
+    <p class="note">上報時間會用你撳提交嗰陣嘅手機時間。<span class="clock" id="nowClock"></span></p>
+    <label class="choice"><input type="checkbox" id="confirmCheck">我已核對，以上資料正確</label>
+    <div class="stack">
+      <button type="button" class="primary" id="submitReport" disabled>提交上報</button>
+      <button type="button" id="backEdit">返回改</button>
+    </div>
+  </section>
+
+  <section data-step="success" hidden>
+    <h2>已收到</h2>
+    <div class="card">
+      <p>已收到，審核後先公開。多謝！</p>
+      <p class="status wait">狀態：待審核</p>
+      <p class="sub">未過關唔會出現喺搜尋頁。請用同一部機開管理頁審核。</p>
+    </div>
+    <div class="stack">
+      <button type="button" class="primary" id="reportAnother">再報另一隻</button>
+      <a class="linkish" href="admin.html#reports">去管理頁審核</a>
+      <a class="linkish" href="index.html">返搜尋</a>
+    </div>
+  </section>
+
+  <section data-step="mine" hidden>
+    <h2>我的上報</h2>
+    <p class="sub">呢度只顯示呢部機交過嘅紀錄。退回可以改完再交。</p>
+    <div id="mineList"></div>
+    <button type="button" id="mineBack">返回</button>
+  </section>
+</main>
+<script src="report-shared.js"></script>
+<script src="report-store.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" async></script>
+<script src="report-wizard.js"></script>
+</body>
+</html>
