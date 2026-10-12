@@ -1,5 +1,6 @@
 /* Click-through: consent → shop → photo → OCR draft → confirm → pending.
-   OCR stays in the browser. A failed read still allows hand entry. */
+   OCR stays in the browser. A failed read still allows hand entry.
+   Shelf tags often print a bare price (105 with a superscript 9) and no $. */
 (function () {
   const S = window.PricewatchShared;
   const Store = window.PricewatchReports;
@@ -14,6 +15,7 @@
     branch: "",
     photoKind: "shelf",
     photoBlob: null,
+    sourceFile: null,
     photoUrl: "",
     photoHash: "",
     keepExistingPhoto: false,
@@ -35,7 +37,7 @@
   let catalog = null;
   let catalogError = "";
   let ocrToken = 0;
-  let workerPromise = null;
+  const workerPromises = {};
   let clockTimer = 0;
 
   const $ = function (id) { return document.getElementById(id); };
@@ -172,6 +174,7 @@
   async function useFile(file) {
     if (!file) return;
     showError("");
+    state.sourceFile = file;
     const blob = await compressImage(file);
     setPhotoUrl(blob);
     state.keepExistingPhoto = false;
@@ -195,17 +198,310 @@
     return "讀相中…";
   }
 
-  function getWorker() {
-    if (!workerPromise) {
+  function getWorker(lang) {
+    if (!workerPromises[lang]) {
       if (!window.Tesseract) return Promise.reject(new Error("no-ocr"));
-      workerPromise = window.Tesseract.createWorker("chi_tra+eng", 1, {
+      // legacyLang false selects the compact 4.0.0_best_int packs on jsDelivr
+      // (chi_tra ~1.6MB, eng ~3MB) instead of the 10–27MB legacy files.
+      workerPromises[lang] = window.Tesseract.createWorker(lang, 1, {
+        legacyLang: false,
         logger: function (m) {
           const el = $("ocrStatus");
           if (el && state.step === "reading") el.textContent = ocrStatusText(m);
         },
+      }).catch(function (err) {
+        delete workerPromises[lang];
+        throw err;
       });
     }
-    return workerPromise;
+    return workerPromises[lang];
+  }
+
+  function decodeImage(file) {
+    return new Promise(function (resolve, reject) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        resolve(img);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("image"));
+      };
+      img.src = url;
+    });
+  }
+
+  function cropCanvas(image, box, targetW) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(targetW));
+    canvas.height = Math.max(1, Math.round(targetW * box.h / Math.max(box.w, 1)));
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, box.x, box.y, box.w, box.h, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  function findShelfBands(image) {
+    const maxW = 480;
+    const scale = Math.min(1, maxW / image.width);
+    const w = Math.max(1, Math.round(image.width * scale));
+    const h = Math.max(1, Math.round(image.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(image, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    const x0 = Math.floor(w * 0.12);
+    const x1 = Math.floor(w * 0.88);
+    function lumAt(x, y) {
+      const i = (y * w + x) * 4;
+      return 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    }
+    const rows = [];
+    for (let y = 0; y < h; y++) {
+      const lums = [];
+      for (let x = x0; x < x1; x += 2) lums.push(lumAt(x, y));
+      lums.sort(function (a, b) { return a - b; });
+      const med = lums[lums.length >> 1] || 0;
+      let ink = 0;
+      for (let x = x0; x < x1; x += 2) if (med - lumAt(x, y) > 26) ink++;
+      rows.push({ med: med, ink: ink, samples: lums.length });
+    }
+    const bands = [];
+    let cur = null;
+    for (let y = 0; y < h; y++) {
+      const r = rows[y];
+      const hot = r.med > 100 && r.ink > r.samples * 0.04 && r.ink < r.samples * 0.55;
+      if (hot) {
+        if (!cur) cur = { y0: y, y1: y };
+        else cur.y1 = y;
+      } else if (cur && y > cur.y1 + 3) {
+        bands.push(cur);
+        cur = null;
+      }
+    }
+    if (cur) bands.push(cur);
+    const tall = bands.map(function (b) {
+      return { y0: b.y0, y1: b.y1, height: b.y1 - b.y0 + 1 };
+    }).filter(function (b) {
+      return b.height > h * 0.025 && b.height < h * 0.4;
+    });
+    tall.sort(function (a, b) { return b.height - a.height; });
+    function px(v) { return Math.max(0, Math.min(image.width, v / w * image.width)); }
+    function py(v) { return Math.max(0, Math.min(image.height, v / h * image.height)); }
+    const found = [];
+    for (let n = 0; n < tall.length && found.length < 3; n++) {
+      const band = tall[n];
+      const cols = [];
+      for (let x = 0; x < w; x++) cols.push(0);
+      for (let y = band.y0; y <= band.y1; y++) {
+        const lums = [];
+        for (let x = x0; x < x1; x += 2) lums.push(lumAt(x, y));
+        lums.sort(function (a, b) { return a - b; });
+        const med = lums[lums.length >> 1] || 0;
+        for (let x = x0; x < x1; x++) if (med - lumAt(x, y) > 26) cols[x]++;
+      }
+      const smooth = cols.map(function (v, i) {
+        let s = 0;
+        for (let k = -2; k <= 2; k++) s += cols[Math.min(w - 1, Math.max(0, i + k))] || 0;
+        return s / 5;
+      });
+      let total = 0;
+      for (let x = 0; x < w; x++) total += smooth[x];
+      if (!(total > 0)) continue;
+      let best = null;
+      for (let i = 0; i < w; i++) {
+        let acc = 0;
+        for (let j = i; j < w; j++) {
+          acc += smooth[j];
+          if (acc >= total * 0.84) {
+            if (!best || j - i < best.x1 - best.x0) best = { x0: i, x1: j };
+            break;
+          }
+        }
+      }
+      if (!best) continue;
+      const coreW = Math.max(1, best.x1 - best.x0);
+      const padL = Math.round(coreW * 0.08 + w * 0.01);
+      const padR = Math.round(coreW * 0.45 + w * 0.01);
+      const padY = Math.round(band.height * 0.2);
+      const price = {
+        x: px(best.x0 - padL),
+        y: py(band.y0 - padY),
+        w: px(best.x1 + padR) - px(best.x0 - padL),
+        h: py(band.y1 + padY) - py(band.y0 - padY),
+      };
+      if (!(price.w > 8) || !(price.h > 8)) continue;
+      const name = {
+        x: image.width * 0.08,
+        y: Math.min(image.height - 4, price.y + price.h * 0.88),
+        w: image.width * 0.84,
+        h: Math.max(price.h * 1.15, image.height * 0.08),
+      };
+      name.w = Math.min(name.w, image.width - name.x);
+      name.h = Math.min(name.h, image.height - name.y);
+      found.push({ price: price, name: name });
+    }
+    return found;
+  }
+
+  function reconcilePrintedPrice(price, raw, parsedPrice) {
+    const dollars = [];
+    const re = /(?:HKD|HK\$|＄|\$)\s*(\d{1,4}(?:[.,]\d{1,2})?)/gi;
+    let m;
+    while ((m = re.exec(String(raw || "")))) {
+      const n = parseFloat(String(m[1]).replace(",", "."));
+      if (n >= 0.5 && n < 10000) dollars.push(Math.round(n * 100) / 100);
+    }
+    if (!dollars.length) return price != null ? price : parsedPrice;
+    if (price == null) return parsedPrice != null ? parsedPrice : dollars[0];
+    if (dollars.some(function (d) { return Math.abs(d - price) < 0.011; })) return price;
+    const cents = Math.round((price % 1) * 100);
+    const bigger = dollars.filter(function (d) {
+      return d > price && d < price * 40 && Math.round((d % 1) * 100) === cents;
+    });
+    if (bigger.length === 1) return bigger[0];
+    return price;
+  }
+
+  function percentPrice(text, value) {
+    const re = /(\d{1,3}(?:[.,]\d{1,2})?)\s*%/g;
+    let m;
+    while ((m = re.exec(String(text || "")))) {
+      const n = parseFloat(m[1].replace(",", "."));
+      if (Math.abs(n - value) < 0.011) return true;
+    }
+    return false;
+  }
+
+  async function recognize(worker, canvas, psm, whitelist) {
+    await worker.setParameters({
+      tessedit_pageseg_mode: String(psm),
+      tessedit_char_whitelist: whitelist || "",
+    });
+    return worker.recognize(canvas);
+  }
+
+  function glyphDigit(text) {
+    const t = String(text || "");
+    if (t === "|" || t === "I" || t === "l" || t === "1") return "1";
+    if (t === "O" || t === "o" || t === "0") return "0";
+    if (/^[2-9]$/.test(t)) return t;
+    return "";
+  }
+
+  function collectSymbols(result) {
+    const symbols = [];
+    const words = (result && result.data && result.data.words) || [];
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const list = word.symbols && word.symbols.length ? word.symbols : [word];
+      for (let j = 0; j < list.length; j++) {
+        const s = list[j];
+        if (!s || !s.bbox) continue;
+        symbols.push({
+          t: String(s.text || ""),
+          c: s.confidence || 0,
+          x0: s.bbox.x0,
+          y0: s.bbox.y0,
+          x1: s.bbox.x1,
+          y1: s.bbox.y1,
+          h: s.bbox.y1 - s.bbox.y0,
+        });
+      }
+    }
+    return symbols;
+  }
+
+  async function readSuperscript(worker, canvas, sym) {
+    const pad = Math.max(6, Math.round(sym.h * 0.12));
+    const patch = {
+      x: Math.max(0, sym.x0 - pad),
+      y: Math.max(0, sym.y0 - pad),
+      w: Math.min(canvas.width, sym.x1 + pad) - Math.max(0, sym.x0 - pad),
+      h: Math.min(canvas.height, sym.y1 + pad) - Math.max(0, sym.y0 - pad),
+    };
+    if (!(patch.w > 4) || !(patch.h > 4)) return "";
+    const scale = 300 / patch.h;
+    const pc = document.createElement("canvas");
+    pc.width = Math.max(1, Math.round(patch.w * scale));
+    pc.height = Math.max(1, Math.round(patch.h * scale));
+    const ctx = pc.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, pc.width, pc.height);
+    ctx.drawImage(canvas, patch.x, patch.y, patch.w, patch.h, 0, 0, pc.width, pc.height);
+    const raw = await recognize(worker, pc, 10, "0123456789");
+    const id = ctx.getImageData(0, 0, pc.width, pc.height);
+    const px = id.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const y = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+      const v = y < 118 ? 0 : 255;
+      px[i] = px[i + 1] = px[i + 2] = v;
+    }
+    ctx.putImageData(id, 0, 0);
+    const bin = await recognize(worker, pc, 10, "0123456789");
+    const choices = [raw, bin].map(function (r) {
+      const text = ((r && r.data && r.data.text) || "").replace(/\D/g, "");
+      return {
+        digit: text.length === 1 ? text : "",
+        conf: r && r.data ? r.data.confidence || 0 : 0,
+      };
+    }).filter(function (c) { return c.digit && c.conf >= 60; });
+    choices.sort(function (a, b) { return b.conf - a.conf; });
+    return choices.length ? choices[0].digit : "";
+  }
+
+  async function assembleShelfPrice(worker, result, canvas) {
+    const symbols = collectSymbols(result);
+    const digitish = symbols.filter(function (s) { return glyphDigit(s.t); });
+    const maxH = digitish.reduce(function (m, s) { return Math.max(m, s.h); }, 0);
+    if (!(maxH > 0)) return null;
+    const large = digitish.filter(function (s) { return s.h >= maxH * 0.62; })
+      .sort(function (a, b) { return a.x0 - b.x0; });
+    const kept = [];
+    for (let i = 0; i < large.length; i++) {
+      const s = large[i];
+      if (kept.length) {
+        const prev = kept[kept.length - 1];
+        if (s.x0 - prev.x1 > maxH * 0.9) break;
+      }
+      kept.push(s);
+    }
+    if (kept.length < 2 || kept.length > 4) return null;
+    const digits = kept.map(function (s) { return glyphDigit(s.t); }).join("");
+    if (!/^\d{2,4}$/.test(digits)) return null;
+    const first = kept[0];
+    const last = kept[kept.length - 1];
+    const top = Math.min.apply(null, kept.map(function (s) { return s.y0; }));
+    const bot = Math.max.apply(null, kept.map(function (s) { return s.y1; }));
+    const dot = symbols.filter(function (s) {
+      return /^[.,．]$/.test(s.t) && s.c >= 40 && s.x0 > first.x0 && s.x1 < last.x1 && s.y0 > (top + bot) / 2;
+    }).sort(function (a, b) { return b.c - a.c; })[0] || null;
+    let cents = "";
+    if (!dot) {
+      const midY = (top + bot) / 2;
+      const sup = symbols.filter(function (s) {
+        return s.x0 >= last.x1 - 8 && s.y0 < midY && s.h < maxH * 0.75 && s.h > maxH * 0.18;
+      }).sort(function (a, b) { return a.x0 - b.x0; })[0];
+      if (sup) {
+        if (/^[0-9]$/.test(sup.t) && sup.c >= 70) cents = sup.t;
+        else cents = await readSuperscript(worker, canvas, sup);
+      }
+    }
+    let value = cents ? Number(digits + "." + cents) : Number(digits);
+    if (dot) {
+      const left = kept.filter(function (s) { return s.x1 <= dot.x0 + 2; })
+        .map(function (s) { return glyphDigit(s.t); }).join("");
+      const right = kept.filter(function (s) { return s.x0 >= dot.x1 - 2; })
+        .map(function (s) { return glyphDigit(s.t); }).join("");
+      if (left && right) value = Number(left + "." + right);
+    }
+    if (!isFinite(value) || value < 0.5 || value > 9999) return null;
+    return Math.round(value * 100) / 100;
   }
 
   function withTimeout(promise, ms) {
@@ -244,22 +540,86 @@
     const token = ++ocrToken;
     show("reading");
     $("ocrStatus").textContent = "準備讀相…";
+    let raw = "";
+    let price = null;
+    let engineConfidence = null;
     try {
-      const worker = await withTimeout(getWorker(), 40000);
+      const started = Date.now();
+      while (!window.Tesseract) {
+        if (Date.now() - started > 20000) throw new Error("no-ocr");
+        await new Promise(function (resolve) { setTimeout(resolve, 200); });
+      }
+      const img = await decodeImage(state.sourceFile || state.photoBlob);
       if (token !== ocrToken) return;
-      const result = await withTimeout(worker.recognize(state.photoBlob), 45000);
+      const bands = findShelfBands(img);
+      const eng = await withTimeout(getWorker("eng"), 45000);
       if (token !== ocrToken) return;
-      const text = result && result.data ? result.data.text : "";
-      const conf = result && result.data ? result.data.confidence : null;
-      rememberOcr(text, conf);
+      let chosen = null;
+      if (bands && bands.length) {
+        $("ocrStatus").textContent = "讀緊價錢…";
+        for (let i = 0; i < bands.length; i++) {
+          const priceCanvas = cropCanvas(img, bands[i].price, 1200);
+          const priceResult = await withTimeout(recognize(eng, priceCanvas, 6, ""), 22000);
+          if (token !== ocrToken) return;
+          const text = (priceResult && priceResult.data && priceResult.data.text) || "";
+          const assembled = await assembleShelfPrice(eng, priceResult, priceCanvas);
+          const cropParsed = S.parseOcr(text);
+          const hasDollar = /(?:HKD|HK\$|＄|\$)\s*\d/.test(text);
+          let candidate = assembled;
+          if (hasDollar && cropParsed.price != null) candidate = cropParsed.price;
+          if (candidate == null || percentPrice(text, candidate)) continue;
+          const hasCents = Math.round(candidate * 100) % 100 !== 0;
+          const score = hasDollar ? 3 : (hasCents ? 2 : 1);
+          if (!chosen || score > chosen.score) {
+            chosen = { score: score, band: bands[i], text: text, price: candidate };
+            engineConfidence = priceResult && priceResult.data ? priceResult.data.confidence : engineConfidence;
+          }
+          if (score >= 2) break;
+        }
+        if (chosen) {
+          price = chosen.price;
+          raw += chosen.text;
+        }
+        const nameBand = (chosen && chosen.band) || bands[0];
+        $("ocrStatus").textContent = "讀緊產品名…";
+        const nameCanvas = cropCanvas(img, nameBand.name, 1500);
+        let nameResult = null;
+        try {
+          const chi = await withTimeout(getWorker("chi_tra+eng"), 50000);
+          if (token !== ocrToken) return;
+          nameResult = await withTimeout(recognize(chi, nameCanvas, 6, ""), 22000);
+        } catch (e) {
+          delete workerPromises["chi_tra+eng"];
+          nameResult = await withTimeout(recognize(eng, nameCanvas, 6, ""), 22000);
+        }
+        if (token !== ocrToken) return;
+        raw += "\n" + ((nameResult && nameResult.data && nameResult.data.text) || "");
+      }
+      const early = S.parseOcr(raw);
+      if (price == null || !early.productGuess) {
+        $("ocrStatus").textContent = "再讀一次成張相…";
+        const full = cropCanvas(img, { x: 0, y: 0, w: img.width, h: img.height }, 1400);
+        const fullResult = await withTimeout(recognize(eng, full, 6, ""), 22000);
+        if (token !== ocrToken) return;
+        raw += "\n" + ((fullResult && fullResult.data && fullResult.data.text) || "");
+        if (engineConfidence == null && fullResult && fullResult.data) {
+          engineConfidence = fullResult.data.confidence;
+        }
+      }
     } catch (e) {
-      if (token !== ocrToken) return;
-      workerPromise = null;
-      rememberOcr("", null);
-      state.ocr.failed = true;
-      state.ocr.confidence = "low";
+      delete workerPromises.eng;
     }
     if (token !== ocrToken) return;
+    const parsed = S.applyEngineConfidence(S.parseOcr(raw), engineConfidence);
+    price = reconcilePrintedPrice(price, raw, parsed.price);
+    rememberOcr(raw, engineConfidence);
+    if (price != null) {
+      state.price = String(price);
+      state.ocr.price = price;
+    }
+    if (price != null || (state.ocr && state.ocr.productGuess)) {
+      state.ocr.failed = false;
+    }
     afterOcr();
   }
 
@@ -390,8 +750,8 @@
       if (preset) applyPicked(preset);
     }
     const searchValue = $("productSearch").value;
-    if (!searchValue && state.ocr && state.ocr.productGuess && !state.productCode) {
-      $("productSearch").value = "";
+    if (!searchValue && state.ocr && state.ocr.productGuess && !state.productCode && !state.newProduct) {
+      $("productSearch").value = state.ocr.productGuess;
     }
     renderPicked();
     renderResults($("productSearch").value);
@@ -530,6 +890,7 @@
     state.branch = "";
     state.photoKind = "shelf";
     setPhotoUrl(null);
+    state.sourceFile = null;
     state.photoHash = "";
     state.keepExistingPhoto = false;
     state.ocr = null;
@@ -717,6 +1078,10 @@
       $("newNameWrap").hidden = !state.newProduct;
       if (state.newProduct) {
         state.productCode = "";
+        if (!$("newName").value && state.ocr && state.ocr.productGuess) {
+          $("newName").value = state.ocr.productGuess;
+          state.productName = state.ocr.productGuess;
+        }
         renderPicked();
       }
       renderCc();
