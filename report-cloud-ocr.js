@@ -26,7 +26,7 @@
     let x = Number(crop && crop.x);
     let y = Number(crop && crop.y);
     if (!isFinite(w)) w = 0.72;
-    if (!isFinite(h)) h = 0.46;
+    if (!isFinite(h)) h = 0.56;
     if (!isFinite(x)) x = 0.14;
     if (!isFinite(y)) y = 0.34;
     w = clamp(w, minSide, maxSide);
@@ -37,7 +37,9 @@
   }
 
   function defaultCrop() {
-    return clampCrop({ x: 0.14, y: 0.34, w: 0.72, h: 0.46 });
+    // Taller than the old box (bottom was 0.80) so the name line under the
+    // price falls inside the yellow box. 0.72 × 0.56 is still under half the frame.
+    return clampCrop({ x: 0.14, y: 0.32, w: 0.72, h: 0.56 });
   }
 
   function nudgeCrop(crop, dx, dy, dw, dh) {
@@ -119,8 +121,38 @@
     return readWorkerUrl(storageGet);
   }
 
+  /** Same offer coverage as report-shared.js parseOcr. */
+  const OFFER_RE = /買\s*第?\s*\d+\s*件\s*半\s*價|第\s*[二2]\s*件\s*半\s*價|買\s*\d+\s*件[^\n]{0,18}|買\s*\d+\s*送\s*\d+|第\s*[二2]\s*件[^\n]{0,12}|\d{1,2}\s*%\s*off|\d+\s*for\s*\$?\s*\d+(?:[.,]\d{1,2})?|減\s*\$?\s*\d+(?:[.,]\d{1,2})?/i;
+
+  function collapseCjkSpaces(s) {
+    return String(s || "")
+      .replace(/([\u4e00-\u9fff])[ \t]+(?=[\u4e00-\u9fff])/g, "$1")
+      .replace(/(\d)[ \t]+(?=[\u4e00-\u9fff])/g, "$1");
+  }
+
+  function cjkCount(s) {
+    return (String(s || "").match(/[\u4e00-\u9fff]/g) || []).length;
+  }
+
   function cleanName(value) {
-    return String(value || "").replace(/\d{6,}/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
+    let cleaned = collapseCjkSpaces(String(value || ""))
+      .replace(/\d{6,}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const match = OFFER_RE.exec(cleaned);
+    if (match) {
+      const before = cleaned.slice(0, match.index).trim();
+      if (cjkCount(before) >= 2 || /[A-Za-z]{3,}/.test(before)) cleaned = before;
+      else return "";
+    }
+    return cleaned.slice(0, 40);
+  }
+
+  function cleanOffer(value) {
+    return collapseCjkSpaces(String(value || ""))
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 40);
   }
 
   function storageGet(key) {
@@ -283,6 +315,7 @@
     readWorkerUrl: readWorkerUrl,
     workerUrlFrom: workerUrlFrom,
     cleanName: cleanName,
+    cleanOffer: cleanOffer,
     syncFromLocation: syncFromLocation,
     enabled: enabled,
     disable: disable,

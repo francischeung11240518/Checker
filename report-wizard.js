@@ -23,7 +23,7 @@
     ocr: null,
     ocrExcerpt: "",
     ocrBlob: null,
-    crop: { x: 0.14, y: 0.34, w: 0.72, h: 0.46 },
+    crop: { x: 0.14, y: 0.32, w: 0.72, h: 0.56 },
     cloudUsed: false,
     cloudTried: false,
     cloudNote: "",
@@ -653,6 +653,7 @@
     const weak = api ? api.localOcrWeak(state.ocr) : true;
     const name = api ? api.cleanName(data && data.productName) : "";
     const price = S.parsePrice(data && data.price);
+    const offer = api ? api.cleanOffer(data && data.offer) : "";
     if (!state.ocr) {
       rememberOcr("", null);
       state.ocr.failed = true;
@@ -665,6 +666,10 @@
       if (state.ocr.confidence === "low") state.ocr.confidence = "mid";
     }
     if (name && (weak || !state.ocr.productGuess)) state.ocr.productGuess = name;
+    if (offer) {
+      state.offerText = offer;
+      state.ocr.offer = offer;
+    }
     state.cloudNote = "以下有雲端預填草稿（功能未定稿），可以錯。請改到啱，下一步要剔「我已核對」先可以提交。";
   }
 
@@ -703,7 +708,7 @@
     $("cloudStatus").hidden = true;
     $("cloudDecline").disabled = false;
     cloudBusy = false;
-    if (result && result.ok && result.data && (result.data.price || result.data.productName)) {
+    if (result && result.ok && result.data && (result.data.price || result.data.productName || result.data.offer)) {
       applyCloudPrefill(result.data);
     } else {
       cloudFallback("雲端預填未能使用，已改由你自己填。可以照常提交。");

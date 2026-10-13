@@ -31,7 +31,119 @@ test("larger price box wins over a smaller offer amount", () => {
     }],
   });
   assert.equal(parsed.price, "49.9");
+    assert.equal(parsed.productName, "潘婷");
+    assert.equal(parsed.offer, "買2件$88");
+});
+
+test("keeps a product name that shares a line with the offer", () => {
+  const parsed = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "潘婷乳液 買2件$88\n$49.9" } }],
+  });
+  assert.equal(parsed.productName, "潘婷乳液");
+  assert.equal(parsed.price, "49.9");
+  assert.equal(parsed.offer, "買2件$88");
+});
+
+test("collapses spaces between Chinese characters", () => {
+  const parsed = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "潘 婷\n$49.9\n" } }],
+  });
   assert.equal(parsed.productName, "潘婷");
+  assert.equal(parsed.price, "49.9");
+  assert.equal(parsed.offer, "");
+});
+
+test("offer lines are not product names, including 半價 and percent off", () => {
+  const rows = [
+    ["潘 婷 乳液\n$49.9\n第二件半價", "潘婷乳液", "49.9", "第二件半價"],
+    ["紫花油\n$49.9\n買2件半價", "紫花油", "49.9", "買2件半價"],
+    ["可樂\n$10.5\n50% off", "可樂", "10.5", "50% off"],
+    ["可樂\n$12\n減 $2", "可樂", "12", "減 $2"],
+    ["可樂\n$10\n2 for $18", "可樂", "10", "2 for $18"],
+    ["保心安\n$53.5\n買2送1", "保心安", "53.5", "買2送1"],
+  ];
+  for (const row of rows) {
+    const parsed = parseVisionResponse({
+      responses: [{ fullTextAnnotation: { text: row[0] } }],
+    });
+    assert.equal(parsed.productName, row[1], row[0]);
+    assert.equal(parsed.price, row[2], row[0]);
+    assert.equal(parsed.offer, row[3], row[0]);
+  }
+});
+
+test("a long offer line does not replace a shorter product name", () => {
+  const parsed = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "潘婷\n$49.9\n買2件$88即日新鮮優惠大特價" } }],
+  });
+  assert.equal(parsed.productName, "潘婷");
+  assert.equal(parsed.price, "49.9");
+  assert.match(parsed.offer, /^買2件\$88/);
+});
+
+test("a larger offer price box does not replace the shelf price", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: "潘婷\n$49.9\n買2件$88" },
+      textAnnotations: [
+        { description: "潘婷\n$49.9\n買2件$88" },
+        { description: "$49.9", boundingPoly: { vertices: [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 30 }, { x: 0, y: 30 }] } },
+        { description: "$88", boundingPoly: { vertices: [{ x: 0, y: 40 }, { x: 200, y: 40 }, { x: 200, y: 160 }, { x: 0, y: 160 }] } },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "49.9");
+  assert.equal(parsed.offer, "買2件$88");
+  assert.equal(parsed.productName, "潘婷");
+});
+
+test("document text symbols keep a Chinese name and the offer", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: {
+        text: "潘 婷\n$49.9\n買2件$88",
+        pages: [{
+          blocks: [{
+            paragraphs: [{
+              words: [
+                {
+                  symbols: [
+                    { text: "潘" },
+                    { text: "婷", property: { detectedBreak: { type: "LINE_BREAK" } } },
+                  ],
+                  boundingBox: { vertices: [{ x: 0, y: 80 }, { x: 80, y: 80 }, { x: 80, y: 110 }, { x: 0, y: 110 }] },
+                },
+                {
+                  symbols: [
+                    { text: "$" },
+                    { text: "4" },
+                    { text: "9" },
+                    { text: "." },
+                    { text: "9", property: { detectedBreak: { type: "LINE_BREAK" } } },
+                  ],
+                  boundingBox: { vertices: [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 70 }, { x: 0, y: 70 }] },
+                },
+                {
+                  symbols: [
+                    { text: "買" },
+                    { text: "2" },
+                    { text: "件" },
+                    { text: "$" },
+                    { text: "8" },
+                    { text: "8", property: { detectedBreak: { type: "LINE_BREAK" } } },
+                  ],
+                  boundingBox: { vertices: [{ x: 0, y: 120 }, { x: 40, y: 120 }, { x: 40, y: 140 }, { x: 0, y: 140 }] },
+                },
+              ],
+            }],
+          }],
+        }],
+      },
+    }],
+  });
+  assert.equal(parsed.productName, "潘婷");
+  assert.equal(parsed.price, "49.9");
+  assert.equal(parsed.offer, "買2件$88");
 });
 
 test("rejects year-like bare numbers and keeps a decimal price", () => {

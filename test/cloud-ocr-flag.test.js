@@ -67,6 +67,8 @@ test("cloud offer rules", () => {
 
 test("default crop is a tag region, never the full frame", () => {
   const crop = Cloud.defaultCrop();
+  assert.deepEqual(crop, { x: 0.14, y: 0.32, w: 0.72, h: 0.56 });
+  assert.ok(crop.y + crop.h > 0.84);
   assert.ok(crop.w <= 0.85 && crop.h <= 0.85);
   assert.ok(crop.w * crop.h < 0.5);
   assert.notEqual(crop.w, 1);
@@ -76,6 +78,17 @@ test("default crop is a tag region, never the full frame", () => {
   assert.equal(grown.h, 0.85);
   assert.ok(grown.x >= 0 && grown.y >= 0);
   assert.ok(grown.x + grown.w <= 1 + 1e-9);
+});
+
+test("name cleanup collapses Chinese spaces and drops a bare offer", () => {
+  assert.equal(Cloud.cleanName("潘 婷"), "潘婷");
+  assert.equal(Cloud.cleanName("潘  婷 乳液"), "潘婷乳液");
+  assert.equal(Cloud.cleanName("PANTENE 潘 婷"), "PANTENE 潘婷");
+  assert.equal(Cloud.cleanName("潘婷乳液 買2件$88"), "潘婷乳液");
+  assert.equal(Cloud.cleanName("第二件半價"), "");
+  assert.equal(Cloud.cleanName("50% off"), "");
+  assert.equal(Cloud.cleanOffer("  買 2 件 半 價  "), "買 2件半價");
+  assert.equal(Cloud.cleanOffer("第 二 件 半 價"), "第二件半價");
 });
 
 test("postCrop sends consent and refuses other hosts", async () => {

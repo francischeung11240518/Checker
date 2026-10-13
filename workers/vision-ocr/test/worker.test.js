@@ -149,11 +149,15 @@ test("successful call returns name and price and does not log the image", async 
     assert.equal(res.status, 200);
     assert.equal(body.productName, "紫花油");
     assert.equal(body.price, "49.9");
+    assert.equal(body.offer, "");
     assert.equal(body.imageBase64, undefined);
     assert.equal(calls.length, 1);
     assert.match(calls[0].url, /vision\.googleapis\.com\/v1\/images:annotate$/);
     const sent = JSON.parse(calls[0].init.body);
-    assert.equal(sent.requests[0].features[0].type, "TEXT_DETECTION");
+    assert.equal(sent.requests.length, 1);
+    assert.equal(sent.requests[0].features.length, 1);
+    assert.equal(sent.requests[0].features[0].type, "DOCUMENT_TEXT_DETECTION");
+    assert.deepEqual(sent.requests[0].imageContext.languageHints, ["zh-Hant", "en"]);
     assert.equal(calls[0].init.headers["x-goog-api-key"], "test-key-not-real");
     assert.equal(calls[0].init.redirect, "error");
     const logText = logs.lines.join("\n");
@@ -162,6 +166,43 @@ test("successful call returns name and price and does not log the image", async 
     assert.match(logText, /"bytes":14/);
     const kv = baseEnv().QUOTA;
     void kv;
+  } finally {
+    logs.restore();
+  }
+});
+
+test("successful call returns the offer phrase and still makes one Vision call", async () => {
+  const calls = [];
+  const logs = captureLogs();
+  try {
+    const res = await handleRequest(
+      postJson({
+        consent: true,
+        imageBase64: Buffer.from(JPEG).toString("base64"),
+        mimeType: "image/jpeg",
+      }),
+      baseEnv(),
+      {
+        fetch: async function (url, init) {
+          calls.push({ url: String(url), init: init });
+          return new Response(JSON.stringify({
+            responses: [{
+              fullTextAnnotation: { text: "潘 婷\n$49.9\n買2件$88\n" },
+            }],
+          }), { status: 200, headers: { "content-type": "application/json" } });
+        },
+        now: new Date("2026-10-13T02:00:00Z"),
+      }
+    );
+    const body = await res.json();
+    assert.equal(body.productName, "潘婷");
+    assert.equal(body.price, "49.9");
+    assert.equal(body.offer, "買2件$88");
+    assert.equal(body.text, undefined);
+    assert.equal(calls.length, 1);
+    const sent = JSON.parse(calls[0].init.body);
+    assert.equal(sent.requests[0].features.length, 1);
+    assert.doesNotMatch(logs.lines.join("\n"), /潘婷|買2件|test-key-not-real/);
   } finally {
     logs.restore();
   }

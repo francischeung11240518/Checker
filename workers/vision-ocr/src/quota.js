@@ -12,8 +12,10 @@ export function num(value, fallback) {
  * (confirm on https://cloud.google.com/vision/pricing before go-live):
  *   - first 1,000 units / month: US$0
  *   - units 1,001–5,000,000: US$1.50 / 1,000
- * One TEXT_DETECTION on one image counts as one unit. This worker sends
- * only that one feature, so one accepted request ≈ one unit.
+ * One DOCUMENT_TEXT_DETECTION on one image counts as one unit, at the
+ * same public list price as TEXT_DETECTION. This worker sends only that
+ * one feature (languageHints are not a feature), so one accepted request
+ * ≈ one unit. Sending TEXT_DETECTION as well would bill a second unit.
  *
  * Hard paid cap default US$15:
  *   paid units at cap = 15 / 1.50 * 1,000 = 10,000
