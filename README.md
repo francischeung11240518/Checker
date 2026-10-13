@@ -17,3 +17,9 @@
 5. 通過之後，返搜尋或者開返嗰隻產品，消委會價旁邊會多一行「用戶上報」。消委會現價唔會被覆蓋，公開頁唔會顯示原圖。
 
 換瀏覽器、換電話，或者清咗網站資料，上報同相片就會冇。
+
+## 內部雲端讀價（預設關閉）
+
+公眾頁只用瀏覽器認字，唔會上傳價牌。內部試點先本機、讀唔到先可選雲端預填，每月 Vision 用量硬封頂 US$15，而且要你同意先會傳裁好嘅小圖。未完成法律閘門之前唔對公眾開放。
+
+說明：[`docs/vision-ocr-internal-pilot.md`](docs/vision-ocr-internal-pilot.md)。Worker：[`workers/vision-ocr/README.md`](workers/vision-ocr/README.md)。
