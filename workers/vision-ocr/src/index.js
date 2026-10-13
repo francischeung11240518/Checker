@@ -174,7 +174,10 @@ async function callVision(env, base64, fetchImpl) {
       body: JSON.stringify({
         requests: [{
           image: { content: base64 },
-          features: [{ type: "TEXT_DETECTION", maxResults: 50 }],
+          // One billable text feature. Dense Chinese shelf tags use document
+          // OCR; languageHints are not a second unit. Do not also send TEXT_DETECTION.
+          features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 50 }],
+          imageContext: { languageHints: ["zh-Hant", "en"] },
         }],
       }),
     });
@@ -263,6 +266,7 @@ export async function handleRequest(request, env, deps) {
     ok: true,
     productName: parsed.productName || "",
     price: parsed.price || "",
+    offer: parsed.offer || "",
   }, 200, corsOrigin);
 }
 

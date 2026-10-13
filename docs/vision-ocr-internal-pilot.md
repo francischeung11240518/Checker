@@ -10,11 +10,11 @@
 
 ## 架構（B+C）
 
-1. 用家影相。內部旗標打開時，預覽有一個價牌黃框（預設中下範圍，最大約 85% 邊長，**唔會預設成張貨架**）。
+1. 用家影相。內部旗標打開時，預覽有一個價牌黃框（預設中下範圍，高度略為加大，以便包到價錢下面嗰行產品名；最大約 85% 邊長，**唔會預設成張貨架**）。
 2. 瀏覽器先喺你部機做貨架認字（英文讀價錢，繁體讀產品名，會處理冇 $ 同上標）。讀到合理價錢（信心中或高，而且有價錢）就預填，**唔上雲**。黃框只係之後如果你同意先會上傳嘅範圍。
 3. 讀唔到、冇價錢，或者信心低，先問上傳通知。用家剔同意並撳「同意並繼續」之後，先 `POST` 裁好嘅 JPEG。
-4. Cloudflare Worker 檢查 kill switch、同意、每日／每月配額、來源同大小，先呼叫 Google Cloud Vision `TEXT_DETECTION`。
-5. 回傳建議品名同價錢做預填。用家仍然要改，並且剔「我已核對」先可以提交。
+4. Cloudflare Worker 檢查 kill switch、同意、每日／每月配額、來源同大小，先呼叫 Google Cloud Vision `DOCUMENT_TEXT_DETECTION`（`languageHints` 為 `zh-Hant` 同 `en`，唔另計單位）。
+5. 回傳建議品名、價錢同優惠字句做預填（優惠填入上報精靈嘅優惠欄）。用家仍然要改，並且剔「我已核對」先可以提交。
 6. Worker 唔通、kill switch 關閉、或者用家拒絕：返本機／人手填，提交唔會壞。
 
 收據**永遠唔上雲**。本機讀到可能係會員、電話或地址嘅字，亦唔會再送去雲端。人面偵測未包括喺呢個骨架（避免多一個 Vision 功能同額外計費）；影相提示仍然要求避開人面同會員卡。
@@ -23,7 +23,7 @@
 
 ## US$15 硬上限同刹車
 
-Google Vision Text Detection 公開價（見 [定價頁](https://cloud.google.com/vision/pricing)，上線前再核對）：每月首 **1,000** 單位免費，之後 **US$1.50／1,000**。一次 `TEXT_DETECTION`、一張圖 = 1 單位。
+Google Vision Text Detection／Document Text Detection 公開價（見 [定價頁](https://cloud.google.com/vision/pricing)，上線前再核對）：每月首 **1,000** 單位免費，之後 **US$1.50／1,000**。一次 `DOCUMENT_TEXT_DETECTION`、一張圖 = 1 單位。唔好同 `TEXT_DETECTION` 一齊送。
 
 ```text
 付費單位上限 = 15 / 1.50 × 1,000 = 10,000

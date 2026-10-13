@@ -1,6 +1,17 @@
-/** Best-effort price-tag parse. Returns name and price only — never the image. */
+/** Best-effort price-tag parse. Returns name, price, and a short offer — never the image. */
 
-const OFFER_RE = /買\s*\d+\s*件[^\n]{0,18}|買\s*\d+\s*送\s*\d+|第\s*[二2]\s*件[^\n]{0,12}|\d+\s*for\s*\$?\s*\d+(?:[.,]\d{1,2})?|減\s*\$?\s*\d+(?:[.,]\d{1,2})?/i;
+/** Same offer coverage as report-shared.js parseOcr, including 半價 and % off. */
+const OFFER_RE = /買\s*第?\s*\d+\s*件\s*半\s*價|第\s*[二2]\s*件\s*半\s*價|買\s*\d+\s*件[^\n]{0,18}|買\s*\d+\s*送\s*\d+|第\s*[二2]\s*件[^\n]{0,12}|\d{1,2}\s*%\s*off|\d+\s*for\s*\$?\s*\d+(?:[.,]\d{1,2})?|減\s*\$?\s*\d+(?:[.,]\d{1,2})?/i;
+
+export function collapseCjkSpaces(s) {
+  return String(s || "")
+    .replace(/([\u4e00-\u9fff])[ \t]+(?=[\u4e00-\u9fff])/g, "$1")
+    .replace(/(\d)[ \t]+(?=[\u4e00-\u9fff])/g, "$1");
+}
+
+function cjkCount(s) {
+  return (String(s || "").match(/[\u4e00-\u9fff]/g) || []).length;
+}
 
 export function normPrice(raw) {
   const n = parseFloat(String(raw).replace(",", "."));
@@ -14,11 +25,38 @@ export function formatPrice(n) {
 }
 
 export function cleanName(value) {
-  return String(value || "")
+  return collapseCjkSpaces(String(value || ""))
     .replace(/\d{6,}/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 40);
+}
+
+export function offerFromText(text) {
+  const raw = collapseCjkSpaces(String(text || ""));
+  const match = OFFER_RE.exec(raw);
+  if (!match) return "";
+  return match[0].replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+/** True when this price token is the amount printed inside the offer phrase. */
+function priceSitsInOffer(offerText, desc) {
+  if (!offerText) return false;
+  const compactOffer = offerText.replace(/\s+/g, "");
+  const compactDesc = String(desc || "").replace(/\s+/g, "");
+  if (!compactDesc) return false;
+  let from = 0;
+  while (from < compactOffer.length) {
+    const at = compactOffer.indexOf(compactDesc, from);
+    if (at < 0) return false;
+    const prev = at > 0 ? compactOffer.charAt(at - 1) : "";
+    const next = compactOffer.charAt(at + compactDesc.length);
+    const glued = (/\d/.test(compactDesc.charAt(0)) && /\d/.test(prev))
+      || (/\d/.test(compactDesc.charAt(compactDesc.length - 1)) && /\d/.test(next));
+    if (!glued) return true;
+    from = at + 1;
+  }
+  return false;
 }
 
 function boxArea(poly) {
@@ -44,7 +82,7 @@ export function priceToken(text) {
 }
 
 function pricesInText(text) {
-  const raw = String(text || "");
+  const raw = collapseCjkSpaces(String(text || ""));
   const offer = OFFER_RE.exec(raw);
   const found = [];
   const re = /(?:HKD|HK\$|＄|\$)\s*(\d{1,4}(?:[.,]\d{1,2})?)/gi;
@@ -96,32 +134,121 @@ function pickPrice(cands) {
   return pool[0].n;
 }
 
+function cleanCore(line) {
+  let core = String(line || "");
+  core = core.replace(/(?:HKD|HK\$|＄|\$)\s*\d{1,4}(?:[.,]\d{1,2})?/gi, " ");
+  core = core.replace(/\d{5,}/g, " ").replace(/[|｜]/g, " ");
+  core = core.replace(/\s+/g, " ").trim();
+  if (!core || priceToken(core) != null) return "";
+  if (cjkCount(core) < 2) return "";
+  const hit = core.match(/(\d{0,3})?\s*([\u4e00-\u9fff][\u4e00-\u9fff0-9]{1,})/);
+  const picked = hit && cjkCount((hit[1] || "") + hit[2]) >= 2 ? (hit[1] || "") + hit[2] : core;
+  return collapseCjkSpaces(picked).replace(/[ \t]+/g, "");
+}
+
+/** Offer lines are not product names. A name printed before the offer on the same line is kept. */
+function nameFromLine(line) {
+  const match = OFFER_RE.exec(line);
+  if (!match) return cleanCore(line);
+  const before = line.slice(0, match.index).trim();
+  if (cjkCount(before) >= 2) return cleanCore(before);
+  return "";
+}
+
 function productNameFromText(text) {
-  const lines = String(text || "").split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
+  const raw = collapseCjkSpaces(String(text || ""));
+  const lines = raw.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
   let best = "";
   let score = 0;
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (OFFER_RE.test(line) && line.length < 24) continue;
-    if (priceToken(line) != null && line.length < 16) continue;
-    const cjk = (line.match(/[\u4e00-\u9fff]/g) || []).length;
+    const candidate = nameFromLine(lines[i]);
+    const cjk = cjkCount(candidate);
     if (cjk >= 2 && cjk > score) {
       score = cjk;
-      best = line;
+      best = candidate;
     }
   }
+  if (score < 2) {
+    const latin = raw.match(/[A-Z][A-Z0-9]{2,}(?:\s+[A-Z][A-Z0-9]{2,}){1,4}/);
+    if (latin) best = latin[0];
+  }
   return cleanName(best);
+}
+
+function symbolBreak(symbol) {
+  const type = symbol && symbol.property && symbol.property.detectedBreak && symbol.property.detectedBreak.type;
+  if (type === "LINE_BREAK" || type === "EOL_SURE_SPACE") return "\n";
+  if (type === "SPACE" || type === "SURE_SPACE") return " ";
+  if (type === "HYPHEN") return "-";
+  return "";
+}
+
+/** DOCUMENT_TEXT_DETECTION pages keep real breaks, so Chinese is not split by a space per character. */
+function textFromAnnotation(annotation) {
+  if (!annotation) return "";
+  const pages = annotation.pages;
+  if (!Array.isArray(pages) || !pages.length) return annotation.text || "";
+  let out = "";
+  let symbols = 0;
+  for (let p = 0; p < pages.length; p++) {
+    const blocks = pages[p].blocks || [];
+    for (let b = 0; b < blocks.length; b++) {
+      const paragraphs = blocks[b].paragraphs || [];
+      for (let i = 0; i < paragraphs.length; i++) {
+        const words = paragraphs[i].words || [];
+        for (let w = 0; w < words.length; w++) {
+          const syms = words[w].symbols || [];
+          for (let s = 0; s < syms.length; s++) {
+            out += syms[s].text || "";
+            out += symbolBreak(syms[s]);
+            if (syms[s].text) symbols += 1;
+          }
+        }
+      }
+    }
+  }
+  if (!symbols || !out.trim()) return annotation.text || "";
+  return out;
+}
+
+function wordsFromAnnotation(annotation) {
+  const words = [];
+  const pages = annotation && annotation.pages;
+  if (!Array.isArray(pages)) return words;
+  for (let p = 0; p < pages.length; p++) {
+    const blocks = pages[p].blocks || [];
+    for (let b = 0; b < blocks.length; b++) {
+      const paragraphs = blocks[b].paragraphs || [];
+      for (let i = 0; i < paragraphs.length; i++) {
+        const list = paragraphs[i].words || [];
+        for (let w = 0; w < list.length; w++) {
+          const syms = list[w].symbols || [];
+          let description = "";
+          for (let s = 0; s < syms.length; s++) description += syms[s].text || "";
+          if (!description) continue;
+          words.push({
+            description: description,
+            boundingPoly: list[w].boundingBox || list[w].boundingPoly,
+          });
+        }
+      }
+    }
+  }
+  return words;
 }
 
 export function parseVisionResponse(payload) {
   const response = payload && Array.isArray(payload.responses) ? payload.responses[0] : null;
   if (!response || response.error) {
-    return { ok: false, productName: "", price: "" };
+    return { ok: false, productName: "", price: "", offer: "" };
   }
-  const text = (response.fullTextAnnotation && response.fullTextAnnotation.text)
+  const annotation = response.fullTextAnnotation;
+  const text = textFromAnnotation(annotation)
     || (response.textAnnotations && response.textAnnotations[0] && response.textAnnotations[0].description)
     || "";
-  const words = Array.isArray(response.textAnnotations) ? response.textAnnotations.slice(1) : [];
+  const offer = offerFromText(text);
+  let words = Array.isArray(response.textAnnotations) ? response.textAnnotations.slice(1) : [];
+  if (!words.length) words = wordsFromAnnotation(annotation);
   let cands = [];
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
@@ -130,7 +257,7 @@ export function parseVisionResponse(payload) {
     const desc = String(word.description || "");
     cands.push({
       n: n,
-      inside: false,
+      inside: priceSitsInOffer(offer, desc),
       decimal: /[.,]\d/.test(desc),
       currency: /[$＄]|HK/i.test(desc),
       area: boxArea(word.boundingPoly),
@@ -142,6 +269,7 @@ export function parseVisionResponse(payload) {
     ok: true,
     productName: productNameFromText(text),
     price: formatPrice(price),
+    offer: offer,
   };
 }
 

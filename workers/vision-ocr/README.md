@@ -1,8 +1,8 @@
 # Checker Vision OCR Worker（內部試點）
 
-靜態 GitHub Pages 繼續用瀏覽器 Tesseract。呢個 Worker 只喺內部旗標打開、用家同意之後，接收**裁好嘅價牌小圖**，呼叫 Google Cloud Vision `TEXT_DETECTION`，回傳建議品名同價錢。處理完即棄原圖。
+靜態 GitHub Pages 繼續用瀏覽器 Tesseract。呢個 Worker 只喺內部旗標打開、用家同意之後，接收**裁好嘅價牌小圖**，呼叫 Google Cloud Vision `DOCUMENT_TEXT_DETECTION`（`languageHints`: `zh-Hant`、`en`），回傳建議品名、價錢同優惠字句。處理完即棄原圖。
 
-**未部署。** 預設 kill switch 關閉。金鑰只放 Worker secret，唔好寫入 git，亦唔好放進 Pages 靜態檔。
+預設 kill switch 關閉。金鑰只放 Worker secret，唔好寫入 git，亦唔好放進 Pages 靜態檔。已上線嘅 Worker 要再部署先會用到新認字（見下面「部署」）。
 
 公眾頁面預設唔會呼叫呢度。見倉庫 `docs/vision-ocr-internal-pilot.md`。
 
@@ -15,7 +15,7 @@
 | 每月首 1,000 單位 | US$0 |
 | 其後至 5,000,000 單位 | **US$1.50／1,000 單位** |
 
-一次請求只送一個 `TEXT_DETECTION`，一張圖計 **1 個單位**。
+一次請求只送一個 `DOCUMENT_TEXT_DETECTION`，一張圖計 **1 個單位**（同 Text Detection 公開價）。`languageHints` 唔係另一個功能，唔另計單位。唔好再加 `TEXT_DETECTION`，否則一張圖會變兩個單位。
 
 Francis 鎖定每月硬上限 **US$15**（付費部分）：
 
@@ -93,6 +93,8 @@ npx wrangler deploy
 # 內部開跑時先改 VISION_OCR_ENABLED = "true" 再部署一次
 ```
 
+合併認字改動之後，已上線嘅 Worker **唔會**自動更新。SuperMarket 要用呢份 `workers/vision-ocr` 再執行 `npx wrangler deploy`。金鑰已經喺 Cloudflare secret，唔使再放，亦唔好寫入頁面。
+
 `POST /` 或 `POST /ocr`。JSON：
 
 ```json
@@ -101,7 +103,7 @@ npx wrangler deploy
 
 `consent` 必須係 JSON 布林 `true`。亦接受 `multipart/form-data`：欄位 `image`（檔案）同 `consent=true`。
 
-成功時只回 `productName` 同 `price`。唔回傳原文，唔落碟。
+成功時回 `productName`、`price` 同 `offer`（短優惠字句，例如「買2件$88」或「第二件半價」）。唔回傳原文，唔落碟。
 
 CORS 只反映：
 
