@@ -119,43 +119,74 @@
     return normNum(t);
   }
 
+  function cjkCount(s) {
+    return (String(s || "").match(/[\u4e00-\u9fff]/g) || []).length;
+  }
+
+  function collapseCjkSpaces(s) {
+    return String(s || "")
+      .replace(/([\u4e00-\u9fff])[ \t]+(?=[\u4e00-\u9fff])/g, "$1")
+      .replace(/(\d)[ \t]+(?=[\u4e00-\u9fff])/g, "$1");
+  }
+
+  function pushPrice(list, token, start) {
+    const n = normNum(token);
+    if (n == null || n < 0.5 || n > 9999) return;
+    list.push({ n: n, start: start, end: start + token.length, raw: token });
+  }
+
   function parseOcr(text) {
-    const raw = String(text || "").replace(/\u0000/g, "");
+    const raw = collapseCjkSpaces(String(text || "").replace(/\u0000/g, ""));
     const dollars = [];
-    const re = /(?:HKD|HK\$|＄|\$)\s*(\d{1,4}(?:[.,]\d{1,2})?)/gi;
+    const bare = [];
+    const dollarRe = /(?:HKD|HK\$|＄|\$)\s*(\d{1,4}(?:[.,]\d{1,2})?)/gi;
     let m;
-    while ((m = re.exec(raw))) {
-      const n = normNum(m[1]);
-      if (n == null) continue;
-      dollars.push({ n: n, start: m.index, end: m.index + m[0].length, raw: m[0] });
-    }
-    const offerRe = /買\s*\d+\s*件[^\n]{0,18}|買\s*\d+\s*送\s*\d+|第\s*[二2]\s*件[^\n]{0,12}|\d+\s*for\s*\$?\s*\d+(?:[.,]\d{1,2})?|減\s*\$?\s*\d+(?:[.,]\d{1,2})?/i;
+    while ((m = dollarRe.exec(raw))) pushPrice(dollars, m[1], m.index);
+    const bareRe = /(?:^|[^\d.])(\d{1,4}[.,]\d{1,2})(?!\d)(?!\s*(?:%|ml|mL|ML|kg|KG|克|毫升))/g;
+    while ((m = bareRe.exec(raw))) pushPrice(bare, m[1], m.index + m[0].indexOf(m[1]));
+    const offerRe = /買\s*第?\s*\d+\s*件\s*半\s*價|第\s*[二2]\s*件\s*半\s*價|買\s*\d+\s*件[^\n]{0,18}|買\s*\d+\s*送\s*\d+|第\s*[二2]\s*件[^\n]{0,12}|\d{1,2}\s*%\s*off|\d+\s*for\s*\$?\s*\d+(?:[.,]\d{1,2})?|減\s*\$?\s*\d+(?:[.,]\d{1,2})?/i;
     const om = offerRe.exec(raw);
     const offer = om ? om[0].replace(/\s+/g, " ").trim().slice(0, 40) : "";
+    function outsideOffer(list) {
+      if (!om) return list;
+      const kept = list.filter(function (d) {
+        return d.end <= om.index || d.start >= om.index + om[0].length;
+      });
+      return kept.length ? kept : list;
+    }
     let price = null;
-    if (dollars.length) {
-      const outside = om
-        ? dollars.filter(function (d) { return d.end <= om.index || d.start >= om.index + om[0].length; })
-        : dollars;
-      const pool = outside.length ? outside : dollars;
-      const withCents = pool.filter(function (d) { return /[.,]\d/.test(d.raw); });
-      price = (withCents.length ? withCents : pool)[0].n;
+    const dollarPool = outsideOffer(dollars);
+    if (dollarPool.length) {
+      const withCents = dollarPool.filter(function (d) { return /[.,]\d/.test(d.raw); });
+      price = (withCents.length ? withCents : dollarPool)[0].n;
+    } else if (bare.length) {
+      const pool = outsideOffer(bare);
+      price = pool[0].n;
     }
     const lines = raw.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
     let productGuess = "";
     let best = 0;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      if (om && line.indexOf(om[0].trim()) !== -1 && line.length < 24) continue;
-      const cjk = (line.match(/[\u4e00-\u9fff]/g) || []).length;
-      if (cjk >= 2 && cjk > best) {
-        best = cjk;
-        productGuess = line.slice(0, 30);
+      if (offerRe.test(line) && cjkCount(line) < 8) continue;
+      const core = line.replace(/\d{5,}/g, " ").replace(/[|｜]/g, " ");
+      const n = cjkCount(core);
+      if (n >= 4 && n > best) {
+        best = n;
+        const hit = core.match(/(\d{0,3})?\s*([\u4e00-\u9fff][\u4e00-\u9fff0-9]{3,})/);
+        productGuess = collapseCjkSpaces(hit ? (hit[1] || "") + hit[2] : core).replace(/[ \t]+/g, "").slice(0, 30);
+      }
+    }
+    if (best < 4) {
+      const latin = raw.match(/[A-Z][A-Z0-9]{2,}(?:\s+[A-Z][A-Z0-9]{2,}){1,4}/);
+      if (latin) {
+        productGuess = latin[0].slice(0, 40);
+        best = 2;
       }
     }
     const failed = !raw.trim();
     let confidence = "low";
-    if (!failed && price != null && best >= 2) confidence = "high";
+    if (!failed && price != null && best >= 4) confidence = "high";
     else if (!failed && (price != null || best >= 2 || raw.trim().length > 8)) confidence = "mid";
     return {
       price: price,
