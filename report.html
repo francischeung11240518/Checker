@@ -152,12 +152,25 @@
     padding: 0.05rem 0.45rem;
   }
   .clock { font-variant-numeric: tabular-nums; }
+  .crop-stage { position: relative; margin: 0 0 0.7rem; }
+  .crop-stage .preview { display: block; width: 100%; margin: 0; }
+  .crop-stage.crop-on .preview { max-height: none; object-fit: fill; background: transparent; }
+  .crop-box {
+    position: absolute;
+    border: 2px solid #f0c36a;
+    box-shadow: 0 0 0 9999px rgba(28, 25, 21, 0.45);
+    border-radius: 8px;
+    touch-action: none;
+    cursor: move;
+  }
+  .draft-tag { margin: 0 0 0.6rem; }
 </style>
 </head>
 <body>
 <main>
   <h1>上報價錢</h1>
-  <p class="banner">私人試用／本機暫存。上報同相片只留喺呢部機、呢個瀏覽器，唔會上傳。換電話或清網站資料就會冇。公開頁唔顯示原圖。</p>
+  <p id="publicBanner" class="banner">私人試用／本機暫存。上報同相片只留喺呢部機、呢個瀏覽器，唔會上傳。換電話或清網站資料就會冇。公開頁唔顯示原圖。</p>
+  <div id="internalCloudNote" class="sub" hidden>內部試點：本機認唔到價先會問你可唔可以上雲。文案係草稿，未定稿。 <button type="button" id="disableCloud" class="ghost">關閉雲端預填</button></div>
   <p id="progress" class="note"></p>
   <p id="saveError" class="warn" hidden></p>
   <p id="returnBanner" class="banner" hidden></p>
@@ -210,8 +223,24 @@
 
   <section data-step="preview" hidden>
     <h2>睇下張相</h2>
-    <img id="previewImg" class="preview" alt="價牌預覽，只留喺呢部機">
-    <p class="sub">價錢同產品名要睇得清。如果影到人或者會員卡，請重拍。</p>
+    <div id="cropStage" class="crop-stage">
+      <img id="previewImg" class="preview" alt="價牌預覽，只留喺呢部機">
+      <div id="cropBox" hidden></div>
+    </div>
+    <div id="cropTools" hidden>
+      <p class="sub">內部試點：本機仍然喺你部機讀成張相入面嘅價牌（包括冇 $ 嘅標籤）。黃框先係之後如果你同意，先會上傳嘅範圍，唔會預設傳成張貨架。</p>
+      <div class="stack row" style="margin-bottom:0.45rem">
+        <button type="button" id="cropSmaller">收窄</button>
+        <button type="button" id="cropLarger">放寬</button>
+      </div>
+      <div class="stack row" style="margin-bottom:0.7rem">
+        <button type="button" id="cropUp">上移</button>
+        <button type="button" id="cropDown">下移</button>
+        <button type="button" id="cropLeft">左移</button>
+        <button type="button" id="cropRight">右移</button>
+      </div>
+    </div>
+    <p id="previewHint" class="sub">價錢同產品名要睇得清。如果影到人或者會員卡，請重拍。</p>
     <div class="stack">
       <button type="button" class="primary" id="usePhoto">用呢張</button>
       <button type="button" id="retake">重拍</button>
@@ -223,6 +252,24 @@
     <p id="ocrStatus" class="card">準備讀相…</p>
     <p class="sub">讀唔到都可以自己填，唔使等。</p>
     <button type="button" id="skipOcr">讀唔到，自己填</button>
+  </section>
+
+  <section data-step="cloud" hidden>
+    <h2>雲端預填</h2>
+    <p class="tag draft-tag">草稿・未定稿・唔係最終法律文本</p>
+    <div class="card">
+      <p>為咗幫你預填價錢同產品名，系統可能會把你裁好嘅價牌小圖傳去 Google 雲端認字服務處理（可能喺香港以外）。我哋唔會長期保存原圖；認完即棄。我哋唔用你張相嚟訓練模型；供應商側跟 Google 設定。</p>
+      <p>你可以揀唔同意，改用手機本機認字或者自己填。預填可以錯，提交前請你自己核對，並勾「我已核對」。</p>
+      <p>影相提示：只影價牌；避免途人面、職員、會員卡、收據上面嘅個人資料。</p>
+    </div>
+    <p class="sub">「雲端預填」：開咗先會喺本機認唔到價嗰陣上雲；隨時可關。關咗之後淨用本機認字或者人手填。</p>
+    <p id="cloudHost" class="sub"></p>
+    <label class="choice"><input type="checkbox" id="cloudConsentCheck">我明白以上係草稿通知，同意今次將裁好嘅價牌小圖送去雲端預填</label>
+    <p id="cloudStatus" class="sub" hidden></p>
+    <div class="stack">
+      <button type="button" class="primary" id="cloudAgree" disabled>同意並繼續</button>
+      <button type="button" id="cloudDecline">只用本機／自己填</button>
+    </div>
   </section>
 
   <section data-step="warn" hidden>
@@ -311,6 +358,7 @@
 </main>
 <script src="report-shared.js"></script>
 <script src="report-store.js"></script>
+<script src="report-cloud-ocr.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" async></script>
 <script src="report-wizard.js"></script>
 </body>

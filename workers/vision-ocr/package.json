@@ -1,0 +1,8 @@
+{
+  "name": "checker-vision-ocr",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1"
+  }
+}

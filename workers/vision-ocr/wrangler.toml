@@ -1,0 +1,24 @@
+name = "checker-vision-ocr"
+main = "src/index.js"
+compatibility_date = "2026-10-13"
+
+# Kill switch defaults OFF. Set to "true" only for the internal pilot,
+# after secrets and the KV namespace below are in place.
+[vars]
+VISION_OCR_ENABLED = "false"
+DAILY_REQUEST_CAP = "50"
+MONTHLY_BUDGET_USD = "15"
+MONTHLY_STOP_FRACTION = "0.8"
+FREE_UNITS_PER_MONTH = "1000"
+PRICE_PER_THOUSAND_USD = "1.50"
+MAX_IMAGE_BYTES = "900000"
+
+# Secrets (wrangler secret put). Do NOT put values here:
+#   GOOGLE_VISION_API_KEY
+#   GOOGLE_VISION_SERVICE_ACCOUNT
+
+# Create with: npx wrangler kv namespace create VISION_OCR_QUOTA
+# Replace the id before any deploy. The worker refuses Vision calls if QUOTA is missing.
+[[kv_namespaces]]
+binding = "QUOTA"
+id = "replace_before_deploy"

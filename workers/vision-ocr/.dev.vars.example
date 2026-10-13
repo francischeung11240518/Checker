@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `npx wrangler dev`. Never commit .dev.vars.
+# Do not put a real key in this example file.
+VISION_OCR_ENABLED=false
+GOOGLE_VISION_API_KEY=
+# Or paste the service-account JSON as one line (still only in .dev.vars, never in git):
+# GOOGLE_VISION_SERVICE_ACCOUNT=

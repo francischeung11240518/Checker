@@ -1,5 +1,6 @@
 /* Same-browser queue for photo price reports.
-   Metadata and photos stay in IndexedDB on this device. Nothing is uploaded. */
+   Metadata and photos stay in IndexedDB on this device. This store does not upload.
+   Optional internal cloud OCR is a separate request and stays off unless the flag is on. */
 (function (root) {
   const DB_NAME = "pricewatch-reports";
   const DB_VERSION = 1;

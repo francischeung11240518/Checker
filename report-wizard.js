@@ -1,6 +1,7 @@
 /* Click-through: consent → shop → photo → OCR draft → confirm → pending.
-   OCR stays in the browser. A failed read still allows hand entry.
-   Shelf tags often print a bare price (105 with a superscript 9) and no $. */
+   Local shelf OCR stays in the browser, including a bare price such as 105
+   with a superscript 9 and no dollar sign. A failed read still allows hand entry.
+   Internal cloud prefill is off unless CheckerCloudOcr is opted in. */
 (function () {
   const S = window.PricewatchShared;
   const Store = window.PricewatchReports;
@@ -21,6 +22,11 @@
     keepExistingPhoto: false,
     ocr: null,
     ocrExcerpt: "",
+    ocrBlob: null,
+    crop: { x: 0.14, y: 0.34, w: 0.72, h: 0.46 },
+    cloudUsed: false,
+    cloudTried: false,
+    cloudNote: "",
     sensitiveAck: false,
     productCode: "",
     productName: "",
@@ -39,6 +45,8 @@
   let ocrToken = 0;
   const workerPromises = {};
   let clockTimer = 0;
+  let cloudBusy = false;
+  let publicBannerDefault = "";
 
   const $ = function (id) { return document.getElementById(id); };
 
@@ -70,6 +78,7 @@
       photo: "3. 影相",
       preview: "3. 預覽",
       reading: "4. 讀相",
+      cloud: "4. 雲端預填",
       warn: "4. 檢查",
       confirm: "5. 核對",
       summary: "6. 摘要",
@@ -87,6 +96,7 @@
     if (step === "confirm") fillConfirm();
     if (step === "summary") fillSummary();
     if (step === "mine") renderMine();
+    syncInternalUi();
     const head = document.querySelector('[data-step="' + step + '"] h2');
     if (head) {
       head.tabIndex = -1;
@@ -178,6 +188,7 @@
     const blob = await compressImage(file);
     setPhotoUrl(blob);
     state.keepExistingPhoto = false;
+    resetCloudDraft();
     try {
       state.photoHash = await sha256(blob);
     } catch (e) {
@@ -536,6 +547,175 @@
     show("confirm");
   }
 
+  function cloudApi() {
+    return window.CheckerCloudOcr || null;
+  }
+
+  function cloudOn() {
+    const api = cloudApi();
+    return !!(api && api.enabled());
+  }
+
+  function resetCloudDraft() {
+    state.ocrBlob = null;
+    state.cloudUsed = false;
+    state.cloudTried = false;
+    state.cloudNote = "";
+    const api = cloudApi();
+    if (api) state.crop = api.defaultCrop();
+  }
+
+  function layoutCropBox() {
+    const box = $("cropBox");
+    if (!box || box.hidden) return;
+    const c = state.crop;
+    box.style.left = (c.x * 100) + "%";
+    box.style.top = (c.y * 100) + "%";
+    box.style.width = (c.w * 100) + "%";
+    box.style.height = (c.h * 100) + "%";
+  }
+
+  function syncInternalUi() {
+    const on = cloudOn();
+    const banner = $("publicBanner");
+    if (banner && !publicBannerDefault) publicBannerDefault = banner.textContent;
+    if (banner && publicBannerDefault) {
+      banner.textContent = on
+        ? "內部試點模式（未對公眾開放）。上報仍然留喺呢部機。只有你喺草稿通知撳同意，先會把裁好嘅價牌小圖短暫上傳做預填。"
+        : publicBannerDefault;
+    }
+    const note = $("internalCloudNote");
+    if (note) note.hidden = !on;
+    if (state.step !== "preview") return;
+    const tools = $("cropTools");
+    const box = $("cropBox");
+    const stage = $("cropStage");
+    if (tools) tools.hidden = !on;
+    if (box) box.hidden = !on;
+    if (stage) stage.classList.toggle("crop-on", on);
+    const hint = $("previewHint");
+    if (hint) {
+      hint.textContent = on
+        ? "本機仍然喺你部機讀成張相入面嘅價牌。黃框先係之後如果你同意，先會上傳嘅範圍，唔會預設傳成張貨架。"
+        : "價錢同產品名要睇得清。如果影到人或者會員卡，請重拍。";
+    }
+    if (on) layoutCropBox();
+  }
+
+  async function prepareOcrBlob() {
+    state.ocrBlob = null;
+    const api = cloudApi();
+    if (!api || !api.enabled()) return state.photoBlob;
+    try {
+      const cropped = await api.cropToBlob(state.photoBlob, state.crop);
+      if (cropped) {
+        state.ocrBlob = cropped;
+        return cropped;
+      }
+    } catch (e) {}
+    return state.photoBlob;
+  }
+
+  function offerCloudNow() {
+    const api = cloudApi();
+    if (!api) return false;
+    return api.shouldOfferCloud({
+      flagOn: api.enabled(),
+      photoKind: state.photoKind,
+      sensitive: !!state.sensitiveMessage,
+      hasCrop: !!state.ocrBlob,
+      ocr: state.ocr,
+    });
+  }
+
+  function prepareCloudStep() {
+    const api = cloudApi();
+    const url = api ? api.workerUrl() : "";
+    let host = "";
+    try {
+      host = url ? new URL(url).host : "";
+    } catch (e) {
+      host = "";
+    }
+    $("cloudHost").textContent = host
+      ? "今次裁好嘅小圖會 POST 去內部代理：" + host + "（再由代理呼叫 Google，金鑰唔喺瀏覽器）。"
+      : "未設定內部 Worker 位址，所以唔會上傳。你可以照常用本機或自己填。";
+    $("cloudConsentCheck").checked = false;
+    $("cloudAgree").disabled = true;
+    $("cloudStatus").hidden = true;
+    cloudBusy = false;
+  }
+
+  function applyCloudPrefill(data) {
+    const api = cloudApi();
+    state.cloudTried = true;
+    state.cloudUsed = true;
+    const weak = api ? api.localOcrWeak(state.ocr) : true;
+    const name = api ? api.cleanName(data && data.productName) : "";
+    const price = S.parsePrice(data && data.price);
+    if (!state.ocr) {
+      rememberOcr("", null);
+      state.ocr.failed = true;
+      state.ocr.confidence = "low";
+    }
+    if (price != null) {
+      state.price = String(price);
+      state.ocr.price = price;
+      state.ocr.failed = false;
+      if (state.ocr.confidence === "low") state.ocr.confidence = "mid";
+    }
+    if (name && (weak || !state.ocr.productGuess)) state.ocr.productGuess = name;
+    state.cloudNote = "以下有雲端預填草稿（功能未定稿），可以錯。請改到啱，下一步要剔「我已核對」先可以提交。";
+  }
+
+  function cloudFallback(message) {
+    state.cloudTried = true;
+    state.cloudUsed = false;
+    state.cloudNote = message || "雲端預填未能使用，已改由你自己填。可以照常提交。";
+  }
+
+  async function acceptCloud() {
+    if (cloudBusy) return;
+    if (!$("cloudConsentCheck").checked) return;
+    if (state.photoKind === "receipt" || !state.ocrBlob) {
+      cloudFallback("冇可上傳嘅價牌裁圖，已改由你自己填。");
+      afterOcr();
+      return;
+    }
+    const api = cloudApi();
+    const url = api ? api.workerUrl() : "";
+    if (!url) {
+      cloudFallback("未設定內部 Worker 位址，已改由你自己填。");
+      afterOcr();
+      return;
+    }
+    cloudBusy = true;
+    $("cloudAgree").disabled = true;
+    $("cloudDecline").disabled = true;
+    $("cloudStatus").hidden = false;
+    $("cloudStatus").textContent = "送緊裁好嘅價牌…";
+    let result = null;
+    try {
+      result = await api.postCrop(url, state.ocrBlob);
+    } catch (e) {
+      result = null;
+    }
+    $("cloudStatus").hidden = true;
+    $("cloudDecline").disabled = false;
+    cloudBusy = false;
+    if (result && result.ok && result.data && (result.data.price || result.data.productName)) {
+      applyCloudPrefill(result.data);
+    } else {
+      cloudFallback("雲端預填未能使用，已改由你自己填。可以照常提交。");
+    }
+    afterOcr();
+  }
+
+  function declineCloud() {
+    cloudFallback("你揀咗只用本機／自己填。");
+    afterOcr();
+  }
+
   async function runOcr() {
     const token = ++ocrToken;
     show("reading");
@@ -543,6 +723,10 @@
     let raw = "";
     let price = null;
     let engineConfidence = null;
+    try {
+      await prepareOcrBlob();
+    } catch (e) {}
+    if (token !== ocrToken) return;
     try {
       const started = Date.now();
       while (!window.Tesseract) {
@@ -619,6 +803,15 @@
     }
     if (price != null || (state.ocr && state.ocr.productGuess)) {
       state.ocr.failed = false;
+    }
+    if (state.sensitiveMessage && !state.sensitiveAck) {
+      afterOcr();
+      return;
+    }
+    if (offerCloudNow()) {
+      prepareCloudStep();
+      show("cloud");
+      return;
     }
     afterOcr();
   }
@@ -728,13 +921,18 @@
     $("newNameWrap").hidden = !state.newProduct;
     $("newName").value = state.newProduct ? state.productName : "";
     const failed = state.ocr && state.ocr.failed;
-    $("draftNote").textContent = failed
+    if (state.cloudNote) $("draftNote").textContent = state.cloudNote;
+    else $("draftNote").textContent = failed
       ? "讀唔到相入面嘅字，請自己填。填好先提交。"
       : "以下係系統讀相結果，請改到啱先提交。";
     const hint = $("priceHint");
-    hint.textContent = state.ocr && state.ocr.price != null && !failed
-      ? "系統讀到價錢，請核對。"
-      : "請自己填價錢。";
+    if (state.cloudUsed && state.ocr && state.ocr.price != null) {
+      hint.textContent = "雲端預填咗價錢，請核對。預填可以錯。";
+    } else {
+      hint.textContent = state.ocr && state.ocr.price != null && !failed
+        ? "系統讀到價錢，請核對。"
+        : "請自己填價錢。";
+    }
     const shopHint = $("shopHint");
     if (state.shopMention && state.shopMention !== state.shopCode) {
       shopHint.hidden = false;
@@ -858,6 +1056,7 @@
         offer: state.ocr ? state.ocr.offer : "",
         productGuess: state.ocr ? state.ocr.productGuess : "",
         excerpt: state.ocrExcerpt || "",
+        cloud: state.cloudUsed ? "prefill" : (state.cloudTried ? "fallback" : ""),
       },
       productCode: state.productCode,
       productName: state.productName,
@@ -895,6 +1094,7 @@
     state.keepExistingPhoto = false;
     state.ocr = null;
     state.ocrExcerpt = "";
+    resetCloudDraft();
     state.sensitiveAck = false;
     state.productCode = state.prefillCode || "";
     state.productName = "";
@@ -977,6 +1177,10 @@
     state.note = rec.note || "";
     state.ocr = rec.ocr || null;
     state.ocrExcerpt = rec.ocr && rec.ocr.excerpt ? rec.ocr.excerpt : "";
+    state.ocrBlob = null;
+    state.cloudUsed = false;
+    state.cloudTried = false;
+    state.cloudNote = "";
     state.sensitiveAck = true;
     const blob = await Store.getPhoto(id);
     if (blob) {
@@ -1054,6 +1258,69 @@
       if (!state.photoBlob) return;
       runOcr();
     });
+    function bindNudge(id, dx, dy, dw, dh) {
+      const el = $(id);
+      if (!el) return;
+      el.addEventListener("click", function () {
+        const api = cloudApi();
+        if (!api) return;
+        state.crop = api.nudgeCrop(state.crop, dx, dy, dw, dh);
+        layoutCropBox();
+      });
+    }
+    bindNudge("cropSmaller", 0, 0, -0.06, -0.06);
+    bindNudge("cropLarger", 0, 0, 0.06, 0.06);
+    bindNudge("cropUp", 0, -0.04, 0, 0);
+    bindNudge("cropDown", 0, 0.04, 0, 0);
+    bindNudge("cropLeft", -0.04, 0, 0, 0);
+    bindNudge("cropRight", 0.04, 0, 0, 0);
+    const cropBox = $("cropBox");
+    if (cropBox) {
+      cropBox.addEventListener("pointerdown", function (ev) {
+        if (!cloudOn()) return;
+        const img = $("previewImg");
+        const rect = img.getBoundingClientRect();
+        const start = {
+          px: ev.clientX,
+          py: ev.clientY,
+          crop: { x: state.crop.x, y: state.crop.y, w: state.crop.w, h: state.crop.h },
+        };
+        if (cropBox.setPointerCapture) cropBox.setPointerCapture(ev.pointerId);
+        function move(e) {
+          const api = cloudApi();
+          if (!api) return;
+          const dx = rect.width ? (e.clientX - start.px) / rect.width : 0;
+          const dy = rect.height ? (e.clientY - start.py) / rect.height : 0;
+          state.crop = api.nudgeCrop(start.crop, dx, dy, 0, 0);
+          layoutCropBox();
+        }
+        function up() {
+          cropBox.removeEventListener("pointermove", move);
+          cropBox.removeEventListener("pointerup", up);
+          cropBox.removeEventListener("pointercancel", up);
+        }
+        cropBox.addEventListener("pointermove", move);
+        cropBox.addEventListener("pointerup", up);
+        cropBox.addEventListener("pointercancel", up);
+        ev.preventDefault();
+      });
+    }
+    $("disableCloud").addEventListener("click", function () {
+      const api = cloudApi();
+      if (api) api.disable();
+      syncInternalUi();
+      if (state.step === "cloud") {
+        cloudFallback("已關閉雲端預填。請自己填。");
+        afterOcr();
+      }
+    });
+    $("cloudConsentCheck").addEventListener("change", function () {
+      const api = cloudApi();
+      const url = api ? api.workerUrl() : "";
+      $("cloudAgree").disabled = !$("cloudConsentCheck").checked || !url || cloudBusy;
+    });
+    $("cloudAgree").addEventListener("click", function () { acceptCloud(); });
+    $("cloudDecline").addEventListener("click", declineCloud);
     $("skipOcr").addEventListener("click", skipOcr);
     $("warnRetake").addEventListener("click", function () { show("photo"); });
     $("warnContinue").addEventListener("click", function () {
@@ -1139,6 +1406,12 @@
   }
 
   async function init() {
+    const api = cloudApi();
+    if (api) {
+      api.syncFromLocation();
+      state.crop = api.defaultCrop();
+    }
+    syncInternalUi();
     bind();
     tickClock();
     clockTimer = setInterval(tickClock, 1000);
