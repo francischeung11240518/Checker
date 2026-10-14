@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>價牌上載審核</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --muted: #6b645c;
+    --paper: #f6f1e8;
+    --card: #fffdf8;
+    --line: #e4d9c8;
+    --green: #1f6b45;
+    --red: #9a3412;
+    --chip: #efe6d6;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.45;
+  }
+  main { max-width: 40rem; margin: 0 auto; padding: 1.1rem 1rem 3rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 0.35rem; }
+  h2 { font-size: 1.08rem; margin: 0 0 0.35rem; }
+  a { color: var(--green); }
+  .note { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.92rem; }
+  .tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--red);
+    background: #fde8d8;
+    border-radius: 999px;
+    padding: 0.08rem 0.5rem;
+    margin: 0 0 0.45rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 0 0 0.75rem;
+  }
+  button {
+    font: inherit;
+    font-size: 1rem;
+    min-height: 48px;
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--chip);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--green);
+    color: #fffdf8;
+    border: 2px solid #145334;
+    font-weight: 700;
+  }
+  button.danger { background: var(--red); color: #fffdf8; border-color: var(--red); }
+  button.ghost { background: transparent; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus, input:focus, textarea:focus { outline: 3px solid #f0c36a; }
+  .filters, .actions { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0 0 0.85rem; }
+  button[aria-pressed="true"] { background: var(--ink); color: #fffdf8; border-color: var(--ink); }
+  label.field { display: block; margin: 0 0 0.7rem; font-weight: 650; }
+  label.field span.hint, .hint {
+    display: block;
+    font-weight: 450;
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin-top: 0.15rem;
+  }
+  input[type="url"], input[type="password"], input[type="text"], textarea {
+    width: 100%;
+    font: inherit;
+    font-size: 1.05rem;
+    margin-top: 0.3rem;
+    padding: 0.7rem 0.8rem;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    background: white;
+  }
+  textarea { min-height: 4.2rem; resize: vertical; }
+  .warn { color: var(--red); font-weight: 650; }
+  .k { color: var(--muted); display: inline-block; min-width: 4.6rem; font-size: 0.88rem; }
+  button.row {
+    display: flex;
+    gap: 0.75rem;
+    width: 100%;
+    text-align: left;
+    align-items: center;
+    border-radius: 16px;
+    background: var(--card);
+    margin: 0 0 0.6rem;
+  }
+  .rowtext { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+  .rowtext span { color: var(--muted); font-size: 0.92rem; overflow-wrap: anywhere; }
+  .thumb {
+    width: 4.5rem;
+    height: 4.5rem;
+    object-fit: cover;
+    border-radius: 10px;
+    background: #1c1915;
+    flex: none;
+  }
+  img.shot {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    background: #1c1915;
+    border-radius: 14px;
+    margin: 0.7rem 0;
+  }
+  #detail { display: flex; flex-direction: column; gap: 0.55rem; }
+  #detail button { width: 100%; }
+  .toast {
+    background: var(--green);
+    color: #fffdf8;
+    border-radius: 14px;
+    padding: 0.75rem 0.9rem;
+    margin-top: 0.8rem;
+  }
+  .empty { font-size: 1.05rem; }
+</style>
+</head>
+<body>
+<main>
+  <p class="tag">內部試點</p>
+  <h1>價牌上載審核</h1>
+  <p class="note">撳清單入面嘅相就可以睇大圖、改產品名同價錢，再通過或拒絕。金鑰只留喺呢個分頁，唔會寫入網頁。拒絕只會標記，唔會通知用家。</p>
+  <p class="note"><a href="admin.html">返回價錢管理</a></p>
+
+  <section class="card" id="setup">
+  <form id="setupForm">
+    <label class="field">上載服務位址
+      <span class="hint">例如 https://checker-photo-upload.…workers.dev 。只接受 workers.dev 或本機。</span>
+      <input id="workerUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://….workers.dev">
+    </label>
+    <label class="field">管理員金鑰
+      <span class="hint">即係 Worker secret ADMIN_KEY。唔好貼去公開地方。</span>
+      <input id="adminKey" type="password" autocomplete="off">
+    </label>
+    <div class="actions">
+      <button id="loadBtn" class="primary" type="button">載入</button>
+      <button id="queueBtn" type="button">上架佇列</button>
+      <button id="forgetBtn" class="ghost" type="button">唔再記住金鑰</button>
+    </div>
+    <p id="setupError" class="warn" hidden></p>
+  </form>
+  </section>
+
+  <div class="filters" id="filters">
+    <button type="button" data-status="pending" aria-pressed="true">待審核</button>
+    <button type="button" data-status="approved" aria-pressed="false">已通過</button>
+    <button type="button" data-status="rejected" aria-pressed="false">已拒絕</button>
+  </div>
+  <section id="list"></section>
+  <section id="detail" hidden></section>
+  <section id="queue" hidden></section>
+  <p id="toast" class="toast" role="status" hidden></p>
+</main>
+<script src="admin-uploads.js"></script>
+</body>
+</html>

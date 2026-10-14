@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "checker-photo-upload",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  },
+  // Kill switch stays off until R2, KV, and ADMIN_KEY exist.
+  // Google Vision keys are NOT set on this Worker. OCR calls checker-vision-ocr.
+  "vars": {
+    "UPLOAD_ENABLED": "false",
+    "MAX_IMAGE_BYTES": "4000000",
+    "UPLOADS_PER_MINUTE": "8",
+    "VISION_OCR_URL": "",
+    "VISION_OCR_MAX_BYTES": "900000"
+  },
+  // Create with: npx wrangler kv namespace create SUBMISSIONS
+  // Paste the returned id over replace_before_deploy before deploy.
+  "kv_namespaces": [
+    {
+      "binding": "SUBMISSIONS",
+      "id": "replace_before_deploy"
+    }
+  ],
+  // Create with: npx wrangler r2 bucket create checker-price-tags
+  // Binding name in code is env.PHOTOS.
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "checker-price-tags"
+    }
+  ]
+}
