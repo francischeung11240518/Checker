@@ -2,7 +2,7 @@
 
 用家上傳一張價牌。呢個 Worker 將圖放入 R2、資料放入 KV，等管理員審核。預設唔接受上傳。
 
-Google Vision 金鑰唔放喺呢度。撳「跑 OCR 預填」時，Worker 先將已儲存嘅相 POST 去現有 `checker-vision-ocr`（該 Worker 先用 `DOCUMENT_TEXT_DETECTION`）。
+Google Vision 金鑰唔放喺呢度。撳「跑 OCR 預填」時，Worker 用 service binding `VISION_OCR` 叫現有 `checker-vision-ocr`（該 Worker 先用 `DOCUMENT_TEXT_DETECTION`）。唔好用公開 `workers.dev` 網址打去同一帳戶嘅 Worker，Cloudflare 會擋。
 
 產品說明（中英）：[`../../docs/photo-upload-internal-pilot.md`](../../docs/photo-upload-internal-pilot.md)。
 
@@ -14,6 +14,7 @@ This pull request does not deploy the Worker. Create the R2 bucket, KV namespace
 |---|---|---|
 | `PHOTOS` | R2 | bucket `checker-price-tags` |
 | `SUBMISSIONS` | KV | metadata, `pending:{id}`, `publish-queue` |
+| `VISION_OCR` | service | Worker `checker-vision-ocr` |
 | `ADMIN_KEY` | secret | header `X-Admin-Key` |
 
 `wrangler.jsonc` vars (not secrets):
@@ -23,7 +24,7 @@ This pull request does not deploy the Worker. Create the R2 bucket, KV namespace
 | `UPLOAD_ENABLED` | `false` | Only `true` / `on` / `1` / `yes` accepts `POST /upload`. |
 | `MAX_IMAGE_BYTES` | `4000000` | Decoded image cap. |
 | `UPLOADS_PER_MINUTE` | `8` | Soft per-IP cap. The counter is not atomic. |
-| `VISION_OCR_URL` | empty | `https://checker-vision-ocr.<subdomain>.workers.dev` or local `http://127.0.0.1:8788`. |
+| `VISION_OCR_URL` | empty | Local fallback only (`http://127.0.0.1:8788`). Production uses the `VISION_OCR` binding. |
 | `VISION_OCR_MAX_BYTES` | `900000` | Skip Vision when the stored photo is larger than the existing OCR Worker allows. |
 
 ## Commands
@@ -44,7 +45,7 @@ npx wrangler deploy
 
 `secret put` prompts for the value. Do not commit it, and do not pass it on the command line.
 
-Leave `UPLOAD_ENABLED` at `false` for the first deploy. When Francis is ready to try uploads, set it to `"true"`, set `VISION_OCR_URL` to the deployed vision-ocr Worker, and deploy again. The vision-ocr Worker still needs its own secret, quota KV, and `VISION_OCR_ENABLED=true`. See [`../vision-ocr/README.md`](../vision-ocr/README.md).
+Leave `UPLOAD_ENABLED` at `false` for the first deploy. When Francis is ready to try uploads, set it to `"true"` and deploy again. Prefill uses the `VISION_OCR` service binding, not a public URL. `VISION_OCR_URL` is only for `wrangler dev` when the binding is not available. The vision-ocr Worker still needs its own secret, quota KV, and `VISION_OCR_ENABLED=true`. See [`../vision-ocr/README.md`](../vision-ocr/README.md). `GET /` reports `ocrViaBinding: true` when the binding is present.
 
 Local dev:
 

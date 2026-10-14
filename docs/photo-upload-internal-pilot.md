@@ -82,7 +82,8 @@ This PR does not create the bucket, set secrets, or deploy.
 | KV `SUBMISSIONS` | 上載資料、待審索引、上架佇列 | `npx wrangler kv namespace create SUBMISSIONS`，將返回嘅 id 換走 `wrangler.jsonc` 入面嘅 `replace_before_deploy` |
 | Secret `ADMIN_KEY` | 管理員請求頭 `X-Admin-Key` | `npx wrangler secret put ADMIN_KEY`（互動輸入，唔好寫入檔案） |
 | `UPLOAD_ENABLED` | 上載開關，預設 `false` | 試用時改做 `"true"` 再部署 |
-| `VISION_OCR_URL` | 現有 `checker-vision-ocr` 嘅 `https://….workers.dev` | 非秘密，寫喺 `vars`。留空就預填掣會話未設定，仍然可以人手填 |
+| Service `VISION_OCR` | 生產環境叫 `checker-vision-ocr`。同一帳戶用公開網址會被 Cloudflare 擋住 | `wrangler.jsonc` 嘅 `services`：`binding` `VISION_OCR`，`service` `checker-vision-ocr` |
+| `VISION_OCR_URL` | 只係本機後備（`http://127.0.0.1:8788`） | 有 binding 時唔會用呢個網址。留空都可以預填 |
 | `MAX_IMAGE_BYTES` | 解碼後上限，預設 4000000 | 可改 |
 | `UPLOADS_PER_MINUTE` | 每個 IP 每分鐘大約 8 次 | 輕量限制，KV 計數唔係原子 |
 | `VISION_OCR_MAX_BYTES` | 預設 900000，同現有認字 Worker 一致 | 太大就唔會送去 Vision |
@@ -114,7 +115,7 @@ npx wrangler deploy
 When you want the pilot to accept photos:
 
 1. `UPLOAD_ENABLED` = `"true"`
-2. `VISION_OCR_URL` = 已部署嘅 `checker-vision-ocr` 網址（該 Worker 自己要 `VISION_OCR_ENABLED=true`，而且已有 Vision secret 同配額 KV）
+2. 確認 `services` 仍然綁 `VISION_OCR` → `checker-vision-ocr`（該 Worker 自己要 `VISION_OCR_ENABLED=true`，而且已有 Vision secret 同配額 KV）。唔好改用公開 `workers.dev` 網址。
 3. 再 `npx wrangler deploy` 一次
 
 本機：`cp .dev.vars.example .dev.vars`，改本地金鑰，然後 `npx wrangler dev`。`.dev.vars` 已 gitignore。
@@ -132,7 +133,7 @@ CORS 只反映 `https://francischeung11240518.github.io`，以及 `localhost`／
 | `GET` | `/submissions/:id` | 管理員 |
 | `GET` | `/submissions/:id/image` | 管理員。相唔公開。 |
 | `PATCH` | `/submissions/:id` | 管理員。`action` 為 `approve`、`reject` 或 `save`。 |
-| `POST` | `/submissions/:id/ocr` | 管理員。叫 `VISION_OCR_URL/ocr`。 |
+| `POST` | `/submissions/:id/ocr` | 管理員。優先 `env.VISION_OCR.fetch`；本機先用 `VISION_OCR_URL`。 |
 | `GET` | `/publish-queue` | 管理員。通過之後嘅上架骨架。 |
 
 管理員請求要帶 `X-Admin-Key`。拒絕回應 `notified: false`。通過嘅 `nextStep` 寫明未寫入產品庫。
@@ -141,13 +142,13 @@ Admin routes require `X-Admin-Key`. Reject responses set `notified: false`. The 
 
 ## OCR 點接 / How prefill reaches Vision
 
-`POST /submissions/:id/ocr` 由 R2 讀相，再以 `{ "consent": true, "mimeType", "imageBase64" }` POST 去現有 Worker 嘅 `/ocr`。`DOCUMENT_TEXT_DETECTION`、語言提示、US$15 刹車都留喺 `checker-vision-ocr`，呢度唔複製金鑰。
+`POST /submissions/:id/ocr` 由 R2 讀相，再以 `{ "consent": true, "mimeType", "imageBase64" }` 經 service binding `VISION_OCR` 叫現有 Worker。`GET /` 會回 `ocrViaBinding`。同一帳戶用 `fetch(https://….workers.dev)` 會被 Cloudflare 拒絕，所以有 binding 時唔會改走公開網址。`DOCUMENT_TEXT_DETECTION`、語言提示、US$15 刹車都留喺 `checker-vision-ocr`，呢度唔複製金鑰。
 
 現有認字 Worker **唔回傳全文**，所以呢度 `rawText` 留空，只預填 `productName`、`price`、`offer`。空欄唔會洗走管理員已經打咗嘅字。
 
 The existing OCR Worker does not return the full transcript, so `rawText` stays empty. Empty OCR fields do not wipe an admin's typed text.
 
-如果 `VISION_OCR_URL` 未設定、相大過 `VISION_OCR_MAX_BYTES`，或者對方 kill switch 關閉，預填會失敗並顯示原因，通過／拒絕仍然可以用人手填。
+如果 binding 同 `VISION_OCR_URL` 都未設定、相大過 `VISION_OCR_MAX_BYTES`，或者對方 kill switch 關閉，預填會失敗並顯示原因，通過／拒絕仍然可以用人手填。
 
 ## 測試 / Tests
 
