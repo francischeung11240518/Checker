@@ -161,6 +161,98 @@ test("does not return raw text", () => {
   assert.ok(!parsed.productName.includes("12345678"));
 });
 
+function box(x, y, w, h) {
+  return {
+    vertices: [
+      { x: x, y: y },
+      { x: x + w, y: y },
+      { x: x + w, y: y + h },
+      { x: x, y: y + h },
+    ],
+  };
+}
+
+test("short name next to the price beats packaging on the same photo", () => {
+  const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
+  const text = "好立克\n$45.9\n" + packaging;
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "好", boundingPoly: box(12, 700, 36, 40) },
+        { description: "立", boundingPoly: box(50, 700, 36, 40) },
+        { description: "克", boundingPoly: box(88, 700, 36, 40) },
+        { description: "$45.9", boundingPoly: box(12, 748, 140, 64) },
+        { description: packaging, boundingPoly: box(0, 20, 420, 48) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, "好立克");
+  assert.equal(parsed.offer, "");
+});
+
+test("short name on the line beside the price beats a longer packaging line", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: {
+        text: "全新升級營養配方香濃麥芽飲品全家共享限時優惠\n好立克\n$45.9",
+      },
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, "好立克");
+});
+
+test("a 價 label anchors the name when the tag has no dollar amount", () => {
+  const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
+  const text = "好立克\n特價\n" + packaging;
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "好立克", boundingPoly: box(10, 500, 120, 36) },
+        { description: "特價", boundingPoly: box(10, 546, 80, 32) },
+        { description: packaging, boundingPoly: box(0, 8, 460, 50) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "");
+  assert.equal(parsed.productName, "好立克");
+});
+
+test("price only still returns the price", () => {
+  const rows = [
+    {
+      responses: [{
+        fullTextAnnotation: { text: "$12.5" },
+        textAnnotations: [
+          { description: "$12.5" },
+          { description: "$12.5", boundingPoly: box(8, 40, 120, 48) },
+        ],
+      }],
+    },
+    { responses: [{ fullTextAnnotation: { text: "特價\n$12.5" } }] },
+  ];
+  for (const payload of rows) {
+    const parsed = parseVisionResponse(payload);
+    assert.equal(parsed.price, "12.5");
+    assert.equal(parsed.productName, "");
+    assert.equal(parsed.offer, "");
+  }
+});
+
+test("no price falls back to the longest Chinese line", () => {
+  const parsed = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "維他\n維他檸檬茶低糖裝" } }],
+  });
+  assert.equal(parsed.price, "");
+  assert.equal(parsed.productName, "維他檸檬茶低糖裝");
+  assert.equal(parsed.offer, "");
+});
+
 test("decode checks magic bytes and size input", () => {
   const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   const b64 = Buffer.from(bytes).toString("base64");

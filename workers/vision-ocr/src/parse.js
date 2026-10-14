@@ -81,6 +81,15 @@ export function priceToken(text) {
   return normPrice(m[1]);
 }
 
+function lineIndexAt(raw, index) {
+  let line = 0;
+  const end = Math.min(Math.max(index, 0), raw.length);
+  for (let i = 0; i < end; i++) {
+    if (raw.charAt(i) === "\n") line += 1;
+  }
+  return line;
+}
+
 function pricesInText(text) {
   const raw = collapseCjkSpaces(String(text || ""));
   const offer = OFFER_RE.exec(raw);
@@ -97,6 +106,7 @@ function pricesInText(text) {
       decimal: /[.,]\d/.test(match[0]),
       currency: true,
       area: 0,
+      lineIndex: lineIndexAt(raw, match.index),
     });
   }
   const lines = raw.split(/\n/);
@@ -111,6 +121,7 @@ function pricesInText(text) {
         decimal: /[.,]\d/.test(lines[i]),
         currency: /[$＄]|HK/i.test(lines[i]),
         area: 0,
+        lineIndex: i,
       });
     }
     offset += lines[i].length + 1;
@@ -131,7 +142,7 @@ function pickPrice(cands) {
     if (a.decimal !== b.decimal) return a.decimal ? -1 : 1;
     return 0;
   });
-  return pool[0].n;
+  return pool[0];
 }
 
 function cleanCore(line) {
@@ -155,13 +166,290 @@ function nameFromLine(line) {
   return "";
 }
 
+const PRICE_LABELS = {
+  "價": true,
+  "售價": true,
+  "特價": true,
+  "正價": true,
+  "原價": true,
+  "現價": true,
+  "價錢": true,
+  "價格": true,
+  "會員價": true,
+  "優惠價": true,
+  "零售價": true,
+  "促銷價": true,
+  "超值價": true,
+};
+
+function normalizeLabel(text) {
+  return collapseCjkSpaces(String(text || ""))
+    .replace(/\s+/g, "")
+    .replace(/[：:．.。]/g, "");
+}
+
+/** 售價 / 特價 / 價 are shelf labels, not the product. */
+function isPriceLabel(text) {
+  const t = normalizeLabel(text);
+  return !!t && !!PRICE_LABELS[t];
+}
+
+/** Drop a leading or trailing price label when a real name remains. */
+function withoutPriceLabel(name) {
+  let t = normalizeLabel(name);
+  if (!t || isPriceLabel(t)) return "";
+  const keys = Object.keys(PRICE_LABELS).filter(function (key) { return key.length >= 2; });
+  keys.sort(function (a, b) { return b.length - a.length; });
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      let next = "";
+      if (t.indexOf(key) === 0) next = t.slice(key.length);
+      else if (t.length > key.length && t.lastIndexOf(key) === t.length - key.length) next = t.slice(0, t.length - key.length);
+      if (next && cjkCount(next) >= 2) {
+        t = next;
+        changed = true;
+        break;
+      }
+    }
+  }
+  return t;
+}
+
+function usableName(line) {
+  const name = withoutPriceLabel(nameFromLine(line));
+  if (!name || isPriceLabel(name) || cjkCount(name) < 2) return "";
+  return name;
+}
+
+function rectFromPoly(poly) {
+  const vertices = poly && poly.vertices;
+  if (!vertices || vertices.length < 2) return null;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < vertices.length; i++) {
+    const x = Number(vertices[i] && vertices[i].x) || 0;
+    const y = Number(vertices[i] && vertices[i].y) || 0;
+    if (x < x0) x0 = x;
+    if (y < y0) y0 = y;
+    if (x > x1) x1 = x;
+    if (y > y1) y1 = y;
+  }
+  if (!(x1 > x0) || !(y1 > y0)) return null;
+  return { x0: x0, y0: y0, x1: x1, y1: y1, w: x1 - x0, h: y1 - y0 };
+}
+
+function gapBetween(a, b) {
+  const gapX = a.x1 <= b.x0 ? b.x0 - a.x1 : b.x1 <= a.x0 ? a.x0 - b.x1 : 0;
+  const gapY = a.y1 <= b.y0 ? b.y0 - a.y1 : b.y1 <= a.y0 ? a.y0 - b.y1 : 0;
+  return { gapX: gapX, gapY: gapY };
+}
+
+/** Neighbourhood around a price or 價 label, in that box's own height and width. */
+function isNearRect(anchor, rect) {
+  const g = gapBetween(anchor, rect);
+  const h = Math.max(anchor.h, 8);
+  const span = Math.max(anchor.w, h);
+  return g.gapX <= span * 3 && g.gapY <= h * 3;
+}
+
+function rectDistance(anchor, rect) {
+  const g = gapBetween(anchor, rect);
+  return Math.hypot(g.gapX, g.gapY);
+}
+
+function sameLine(a, b) {
+  const overlap = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+  const minH = Math.min(a.h, b.h);
+  if (minH > 0 && overlap >= minH * 0.45) return true;
+  const ay = (a.y0 + a.y1) / 2;
+  const by = (b.y0 + b.y1) / 2;
+  return Math.abs(ay - by) <= Math.max(a.h, b.h) * 0.45;
+}
+
+function joinWordText(parts) {
+  let s = "";
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (!s) {
+      s = part;
+      continue;
+    }
+    const prev = s.charAt(s.length - 1);
+    const next = part.charAt(0);
+    if (/[\u4e00-\u9fff]/.test(prev) && /[\u4e00-\u9fff]/.test(next)) s += part;
+    else s += " " + part;
+  }
+  return s;
+}
+
+function preferCloser(dist, cjk, bestDist, bestCjk) {
+  if (dist < bestDist) return true;
+  if (dist > bestDist) return false;
+  return cjk > bestCjk;
+}
+
+function boxAnchors(words, priceCand) {
+  const anchors = [];
+  const priceRect = priceCand && rectFromPoly(priceCand.poly);
+  if (priceRect) anchors.push(priceRect);
+  const labels = [];
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (!isPriceLabel(word && word.description)) continue;
+    const rect = rectFromPoly(word.boundingPoly);
+    if (rect) labels.push(rect);
+  }
+  if (priceRect) {
+    for (let i = 0; i < labels.length; i++) {
+      if (isNearRect(priceRect, labels[i])) anchors.push(labels[i]);
+    }
+  } else if (!priceCand || priceCand.n == null) {
+    for (let i = 0; i < labels.length; i++) anchors.push(labels[i]);
+  }
+  return anchors;
+}
+
+/** Name words whose boxes sit next to the chosen price, or next to a nearby 價 label. */
+function productNameNearBoxes(words, priceCand) {
+  if (!words || !words.length) return "";
+  const anchors = boxAnchors(words, priceCand);
+  if (!anchors.length) return "";
+  const items = [];
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const desc = String(word && word.description || "").trim();
+    if (!desc || priceToken(desc) != null || isPriceLabel(desc)) continue;
+    const rect = rectFromPoly(word && word.boundingPoly);
+    if (!rect) continue;
+    let dist = Infinity;
+    for (let a = 0; a < anchors.length; a++) {
+      if (!isNearRect(anchors[a], rect)) continue;
+      const d = rectDistance(anchors[a], rect);
+      if (d < dist) dist = d;
+    }
+    if (dist === Infinity) continue;
+    items.push({ desc: desc, rect: rect, dist: dist });
+  }
+  if (!items.length) return "";
+  items.sort(function (a, b) {
+    if (a.rect.y0 !== b.rect.y0) return a.rect.y0 - b.rect.y0;
+    return a.rect.x0 - b.rect.x0;
+  });
+  const lines = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    let line = null;
+    for (let j = 0; j < lines.length; j++) {
+      if (sameLine(lines[j].seed, item.rect)) {
+        line = lines[j];
+        break;
+      }
+    }
+    if (!line) lines.push({ seed: item.rect, items: [item], dist: item.dist });
+    else {
+      line.items.push(item);
+      if (item.dist < line.dist) line.dist = item.dist;
+    }
+  }
+  let best = "";
+  let bestDist = Infinity;
+  let bestCjk = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    line.items.sort(function (a, b) { return a.rect.x0 - b.rect.x0; });
+    const parts = [];
+    for (let j = 0; j < line.items.length; j++) parts.push(line.items[j].desc);
+    const name = usableName(joinWordText(parts));
+    const cjk = cjkCount(name);
+    if (!name || !preferCloser(line.dist, cjk, bestDist, bestCjk)) continue;
+    bestDist = line.dist;
+    bestCjk = cjk;
+    best = name;
+  }
+  return cleanName(best);
+}
+
+function lineHasChosenPrice(line, price) {
+  if (price == null) return false;
+  const trimmed = String(line || "").trim();
+  if (priceToken(trimmed) === price) return true;
+  const re = /(?:HKD|HK\$|＄|\$)\s*(\d{1,4}(?:[.,]\d{1,2})?)/gi;
+  let match;
+  while ((match = re.exec(trimmed))) {
+    if (normPrice(match[1]) === price) return true;
+  }
+  return false;
+}
+
+function textAnchorIndexes(lines, priceCand) {
+  const indexes = [];
+  if (priceCand && priceCand.n != null) {
+    if (priceCand.lineIndex != null && priceCand.lineIndex >= 0 && priceCand.lineIndex < lines.length) {
+      indexes.push(priceCand.lineIndex);
+      return indexes;
+    }
+    for (let i = 0; i < lines.length; i++) {
+      if (lineHasChosenPrice(lines[i], priceCand.n)) indexes.push(i);
+    }
+    if (indexes.length) return indexes;
+  }
+  for (let i = 0; i < lines.length; i++) {
+    if (isPriceLabel(lines[i])) indexes.push(i);
+  }
+  return indexes;
+}
+
+/** No boxes: the name is the closest qualifying line to the price or a 價 label. */
+function productNameNearLines(text, priceCand) {
+  const raw = collapseCjkSpaces(String(text || ""));
+  const lines = raw.split(/\n/);
+  const anchors = textAnchorIndexes(lines, priceCand);
+  if (!anchors.length) return "";
+  let best = "";
+  let bestDist = Infinity;
+  let bestCjk = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const name = usableName(lines[i]);
+    const cjk = cjkCount(name);
+    if (!name) continue;
+    let dist = Infinity;
+    for (let a = 0; a < anchors.length; a++) {
+      const d = Math.abs(i - anchors[a]);
+      if (d < dist) dist = d;
+    }
+    if (!preferCloser(dist, cjk, bestDist, bestCjk)) continue;
+    bestDist = dist;
+    bestCjk = cjk;
+    best = name;
+  }
+  return cleanName(best);
+}
+
+/**
+ * Whole-pack photos: branding is the longest Chinese line, the shelf name sits by the price.
+ * Use Vision boxes when we have them, otherwise the nearest text line.
+ * The old longest-line guess runs only when there is no price or 價 anchor, or no name beside it.
+ */
+function chooseProductName(text, words, priceCand) {
+  const nearBox = productNameNearBoxes(words, priceCand);
+  if (nearBox) return nearBox;
+  const nearLine = productNameNearLines(text, priceCand);
+  if (nearLine) return nearLine;
+  return productNameFromText(text);
+}
+
 function productNameFromText(text) {
   const raw = collapseCjkSpaces(String(text || ""));
   const lines = raw.split(/\n/).map(function (s) { return s.trim(); }).filter(Boolean);
   let best = "";
   let score = 0;
   for (let i = 0; i < lines.length; i++) {
-    const candidate = nameFromLine(lines[i]);
+    const candidate = usableName(lines[i]);
     const cjk = cjkCount(candidate);
     if (cjk >= 2 && cjk > score) {
       score = cjk;
@@ -261,13 +549,15 @@ export function parseVisionResponse(payload) {
       decimal: /[.,]\d/.test(desc),
       currency: /[$＄]|HK/i.test(desc),
       area: boxArea(word.boundingPoly),
+      poly: word.boundingPoly || null,
     });
   }
   if (!cands.length) cands = pricesInText(text);
-  const price = pickPrice(cands);
+  const picked = pickPrice(cands);
+  const price = picked ? picked.n : null;
   return {
     ok: true,
-    productName: productNameFromText(text),
+    productName: chooseProductName(text, words, picked),
     price: formatPrice(price),
     offer: offer,
   };
