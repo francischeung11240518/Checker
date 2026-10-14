@@ -39,5 +39,13 @@
       "binding": "PHOTOS",
       "bucket_name": "checker-price-tags"
     }
+  ],
+  // Production OCR prefill. Same-account fetch() to workers.dev is blocked,
+  // so this calls checker-vision-ocr in-account. VISION_OCR_URL is local fallback only.
+  "services": [
+    {
+      "binding": "VISION_OCR",
+      "service": "checker-vision-ocr"
+    }
   ]
 }

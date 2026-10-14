@@ -32,7 +32,7 @@ const MESSAGES = {
   unauthorized: "管理員金鑰不正確。",
   conflict: "呢筆已經處理過。",
   note_required: "拒絕要寫低原因。系統唔會通知用家。",
-  ocr_unconfigured: "未設定 Vision OCR 位址。請把 VISION_OCR_URL 指去已部署嘅 checker-vision-ocr。",
+  ocr_unconfigured: "未設定 Vision OCR。生產環境要用 VISION_OCR service binding；本機先用 VISION_OCR_URL。",
   ocr_image_too_large: "呢張相比現有雲端認字上限大，未能預填。可以人手填。",
   ocr_upstream: "雲端認字暫時未能使用。",
   image_missing: "搵唔到原圖。",
@@ -247,13 +247,22 @@ async function allowUpload(env, request, now) {
   return true;
 }
 
+/** In-account binding. Present after deploy; absent in local tests unless stubbed. */
+function visionBinding(env) {
+  const binding = env && env.VISION_OCR;
+  if (binding && typeof binding.fetch === "function") return binding;
+  return null;
+}
+
 function health(env, origin) {
+  const viaBinding = !!visionBinding(env);
   const ocrUrl = env && env.VISION_OCR_URL ? String(env.VISION_OCR_URL).trim() : "";
   return json({
     ok: true,
     service: "checker-photo-upload",
     uploadEnabled: killSwitchEnabled(env && env.UPLOAD_ENABLED),
-    ocrConfigured: !!ocrEndpoint(ocrUrl),
+    ocrConfigured: viaBinding || !!ocrEndpoint(ocrUrl),
+    ocrViaBinding: viaBinding,
     storage: {
       kv: !!(env && env.SUBMISSIONS && typeof env.SUBMISSIONS.get === "function"),
       r2: !!(env && env.PHOTOS && typeof env.PHOTOS.put === "function"),
@@ -493,8 +502,11 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
   const rec = await readRecord(env, id);
   if (!rec) return fail("not_found", 404, origin, { op: "ocr", id: id });
   if (rec.status !== "pending") return fail("conflict", 409, origin, { op: "ocr", id: id });
-  const endpoint = ocrEndpoint(env && env.VISION_OCR_URL);
-  if (!endpoint) return fail("ocr_unconfigured", 503, origin, { op: "ocr", id: id });
+  // Prefer the service binding. A public workers.dev fetch between Workers in the
+  // same account is rejected by Cloudflare, so do not fall back when the binding exists.
+  const binding = visionBinding(env);
+  const endpoint = binding ? "" : ocrEndpoint(env && env.VISION_OCR_URL);
+  if (!binding && !endpoint) return fail("ocr_unconfigured", 503, origin, { op: "ocr", id: id });
   const obj = await env.PHOTOS.get(rec.imageKey);
   if (!obj || typeof obj.arrayBuffer !== "function") {
     return fail("image_missing", 404, origin, { op: "ocr", id: id });
@@ -510,7 +522,7 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
   const timer = setTimeout(function () { ctrl.abort(); }, 20000);
   let upstream;
   try {
-    upstream = await fetchImpl(endpoint, {
+    const init = {
       method: "POST",
       redirect: "error",
       signal: ctrl.signal,
@@ -520,7 +532,12 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
         mimeType: rec.contentType,
         imageBase64: bytesToBase64(bytes),
       }),
-    });
+    };
+    if (binding) {
+      upstream = await binding.fetch(new Request("https://checker-vision-ocr/ocr", init));
+    } else {
+      upstream = await fetchImpl(endpoint, init);
+    }
   } catch (e) {
     rec.ocrError = MESSAGES.ocr_upstream;
     rec.ocrAt = now.toISOString();
@@ -571,6 +588,7 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
     filled: filled,
     rawText: "",
     ocrVia: "checker-vision-ocr",
+    ocrViaBinding: !!binding,
     item: toAdminItem(rec, true),
   }, 200, origin);
 }

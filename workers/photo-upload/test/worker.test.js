@@ -363,6 +363,46 @@ test("ocr prefill calls checker-vision-ocr and does not call Google directly", a
   assert.equal(body.item.offer, "第二件半價");
   assert.equal(body.rawText, "");
   assert.equal(body.ocrVia, "checker-vision-ocr");
+  assert.equal(body.ocrViaBinding, false);
+});
+
+test("production ocr uses the service binding and skips the public workers.dev fetch", async () => {
+  const env = baseEnv({
+    VISION_OCR_URL: "https://checker-vision-ocr.example.workers.dev/",
+    VISION_OCR: {
+      async fetch(request) {
+        const sent = await request.json();
+        return new Response(JSON.stringify({
+          ok: true,
+          productName: sent.consent === true ? "維他奶" : "",
+          price: "8.5",
+          offer: "第二件半價",
+          sawUrl: request.url,
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      },
+    },
+  });
+  const created = await (await uploadJpeg(env, {})).json();
+  let publicFetches = 0;
+  const res = await handleRequest(new Request("https://worker.test/submissions/" + created.id + "/ocr", {
+    method: "POST",
+    headers: adminHeaders(),
+  }), env, {
+    now: NOW,
+    fetch: async function () {
+      publicFetches += 1;
+      throw new Error("public fetch must not run");
+    },
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(publicFetches, 0);
+  assert.equal(body.ocrViaBinding, true);
+  assert.equal(body.item.productName, "維他奶");
+  assert.equal(body.item.price, "8.5");
+  const health = await (await handleRequest(new Request("https://worker.test/"), env, { now: NOW })).json();
+  assert.equal(health.ocrViaBinding, true);
+  assert.equal(health.ocrConfigured, true);
 });
 
 test("ocr without a vision URL does not fetch", async () => {
@@ -424,6 +464,7 @@ test("health hides the admin key and reports the kill switch", async () => {
   assert.equal(body.service, "checker-photo-upload");
   assert.equal(body.uploadEnabled, false);
   assert.equal(body.ocrConfigured, false);
+  assert.equal(body.ocrViaBinding, false);
   assert.equal(JSON.stringify(body).includes("test-admin-key"), false);
 });
 
@@ -433,6 +474,8 @@ test("config keeps the upload switch off and does not embed secrets", () => {
   assert.match(cfg, /"binding": "PHOTOS"/);
   assert.match(cfg, /"bucket_name": "checker-price-tags"/);
   assert.match(cfg, /"binding": "SUBMISSIONS"/);
+  assert.match(cfg, /"binding": "VISION_OCR"/);
+  assert.match(cfg, /"service": "checker-vision-ocr"/);
   assert.match(cfg, /replace_before_deploy/);
   assert.doesNotMatch(cfg, /GOOGLE_VISION|PRIVATE KEY|AIza/);
   const example = fs.readFileSync(new URL("../.dev.vars.example", import.meta.url), "utf8");
