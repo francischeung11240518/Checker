@@ -145,6 +145,26 @@ function pickPrice(cands) {
   return pool[0];
 }
 
+const SIZE_UNIT = "ml|mL|ML|kg|KG|g|L|l|克|毫升|升|粒|片|包|支|罐|盒|件|裝";
+
+/** CJK name plus a short pack/size (60粒, 500ml, 1.25L, x8, 8包裝). Not a barcode or $price. */
+function productSpan(core) {
+  const unit = "(?:" + SIZE_UNIT + ")";
+  const re = new RegExp(
+    "\\d{0,4}\\s*[\\u4e00-\\u9fff](?:" +
+      "[\\u4e00-\\u9fff]" +
+      "|\\d{1,4}[.,]\\d{1,3}\\s*" + unit +
+      "|\\d{1,4}(?![.,]\\d)\\s*" + unit + "?" +
+      "|[xX×]\\s*\\d{1,4}" +
+      "|\\s+\\d{1,4}[.,]\\d{1,3}\\s*" + unit +
+      "|\\s+\\d{1,4}(?![.,]\\d)\\s*" + unit + "?" +
+      "|\\s+[xX×]\\s*\\d{1,4}" +
+    ")*"
+  );
+  const match = String(core || "").match(re);
+  return match ? match[0] : "";
+}
+
 function cleanCore(line) {
   let core = String(line || "");
   core = core.replace(/(?:HKD|HK\$|＄|\$)\s*\d{1,4}(?:[.,]\d{1,2})?/gi, " ");
@@ -152,9 +172,18 @@ function cleanCore(line) {
   core = core.replace(/\s+/g, " ").trim();
   if (!core || priceToken(core) != null) return "";
   if (cjkCount(core) < 2) return "";
-  const hit = core.match(/(\d{0,3})?\s*([\u4e00-\u9fff][\u4e00-\u9fff0-9]{1,})/);
-  const picked = hit && cjkCount((hit[1] || "") + hit[2]) >= 2 ? (hit[1] || "") + hit[2] : core;
+  const hit = productSpan(core);
+  const picked = hit && cjkCount(hit) >= 2 ? hit : core;
   return collapseCjkSpaces(picked).replace(/[ \t]+/g, "");
+}
+
+/** Currency amounts and the chosen price word are not pack counts. Bare 60 / 500 stay. */
+function isShelfPriceWord(desc, priceCand) {
+  const t = String(desc || "").trim();
+  if (!t || priceToken(t) == null) return false;
+  if (/[$＄]|HK/i.test(t)) return true;
+  const chosen = priceCand && String(priceCand.description || "").trim();
+  return !!chosen && chosen === t;
 }
 
 /** Offer lines are not product names. A name printed before the offer on the same line is kept. */
@@ -185,7 +214,8 @@ const PRICE_LABELS = {
 function normalizeLabel(text) {
   return collapseCjkSpaces(String(text || ""))
     .replace(/\s+/g, "")
-    .replace(/[：:．.。]/g, "");
+    .replace(/[：:．。]/g, "")
+    .replace(/\.(?!\d)/g, "");
 }
 
 /** 售價 / 特價 / 價 are shelf labels, not the product. */
@@ -327,7 +357,7 @@ function productNameNearBoxes(words, priceCand) {
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const desc = String(word && word.description || "").trim();
-    if (!desc || priceToken(desc) != null || isPriceLabel(desc)) continue;
+    if (!desc || isShelfPriceWord(desc, priceCand) || isPriceLabel(desc)) continue;
     const rect = rectFromPoly(word && word.boundingPoly);
     if (!rect) continue;
     let dist = Infinity;
@@ -555,6 +585,7 @@ export function parseVisionResponse(payload) {
       currency: /[$＄]|HK/i.test(desc),
       area: boxArea(word.boundingPoly),
       poly: word.boundingPoly || null,
+      description: desc,
     });
   }
   if (!cands.length) cands = pricesInText(text);

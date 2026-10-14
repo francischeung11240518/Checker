@@ -172,6 +172,44 @@ function box(x, y, w, h) {
   };
 }
 
+test("keeps a pack count in the name next to the price", () => {
+  const boxed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: "余仁生烏髮生膠囊\n60\n粒\n$128" },
+      textAnnotations: [
+        { description: "余仁生烏髮生膠囊\n60\n粒\n$128" },
+        { description: "余仁生烏髮生膠囊", boundingPoly: box(10, 700, 240, 36) },
+        { description: "60", boundingPoly: box(254, 700, 36, 36) },
+        { description: "粒", boundingPoly: box(294, 700, 32, 36) },
+        { description: "$128", boundingPoly: box(10, 748, 180, 72) },
+      ],
+    }],
+  });
+  assert.equal(boxed.productName, "余仁生烏髮生膠囊60粒");
+  assert.equal(boxed.price, "128");
+  assert.equal(boxed.offer, "");
+
+  const spaced = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "余仁生烏髮生膠囊 60 粒\n$128" } }],
+  });
+  assert.equal(spaced.productName, "余仁生烏髮生膠囊60粒");
+  assert.equal(spaced.price, "128");
+
+  const sizes = [
+    ["可樂500ml\n$8.5", "可樂500ml", "8.5"],
+    ["果汁 1.25L\n$12", "果汁1.25L", "12"],
+    ["威化餅x8\n$15.5", "威化餅x8", "15.5"],
+    ["8包裝曲奇\n$20", "8包裝曲奇", "20"],
+  ];
+  for (const row of sizes) {
+    const parsed = parseVisionResponse({
+      responses: [{ fullTextAnnotation: { text: row[0] } }],
+    });
+    assert.equal(parsed.productName, row[1], row[0]);
+    assert.equal(parsed.price, row[2], row[0]);
+  }
+});
+
 test("short name next to the price beats packaging on the same photo", () => {
   const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
   const text = "好立克\n$45.9\n" + packaging;
