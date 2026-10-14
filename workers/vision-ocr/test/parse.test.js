@@ -197,12 +197,55 @@ test("short name on the line beside the price beats a longer packaging line", ()
   const parsed = parseVisionResponse({
     responses: [{
       fullTextAnnotation: {
-        text: "全新升級營養配方香濃麥芽飲品全家共享限時優惠\n好立克\n$45.9",
+        text: "全新升級營養配方香濃麥芽飲品全家共享限時優惠\n\n\n好立克\n$45.9",
       },
     }],
   });
   assert.equal(parsed.price, "45.9");
   assert.equal(parsed.productName, "好立克");
+});
+
+test("a longer name next to the price beats closer short text and farther packaging", () => {
+  const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
+  const longer = "維他檸檬茶低糖裝";
+  const text = packaging + "\n\n\n" + longer + "\n好立克\n$45.9";
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: packaging, boundingPoly: box(0, 10, 460, 40) },
+        { description: longer, boundingPoly: box(12, 620, 280, 40) },
+        { description: "好立克", boundingPoly: box(12, 700, 110, 40) },
+        { description: "$45.9", boundingPoly: box(12, 748, 140, 64) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, longer);
+  assert.equal(parsed.offer, "");
+});
+
+test("two nearby lines use the one with more Chinese characters", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: {
+        text: "全新升級營養配方香濃麥芽飲品全家共享限時優惠\n\n\n維他檸檬茶低糖裝\n好立克\n$45.9",
+      },
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, "維他檸檬茶低糖裝");
+});
+
+test("whole-image longest name is used only when nothing usable is near the price", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: "維他檸檬茶低糖裝\n\n\n\n$12.5" },
+    }],
+  });
+  assert.equal(parsed.price, "12.5");
+  assert.equal(parsed.productName, "維他檸檬茶低糖裝");
 });
 
 test("a 價 label anchors the name when the tag has no dollar amount", () => {

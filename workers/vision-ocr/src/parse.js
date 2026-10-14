@@ -287,10 +287,14 @@ function joinWordText(parts) {
   return s;
 }
 
-function preferCloser(dist, cjk, bestDist, bestCjk) {
-  if (dist < bestDist) return true;
-  if (dist > bestDist) return false;
-  return cjk > bestCjk;
+/** Lines this close to the price or a 價 label count as the nearby region. */
+const NEAR_LINE_DIST = 2;
+
+/** Inside the nearby region, the most Chinese characters win. Distance only breaks a tie. */
+function preferMostCjk(cjk, dist, bestCjk, bestDist) {
+  if (cjk > bestCjk) return true;
+  if (cjk < bestCjk) return false;
+  return dist < bestDist;
 }
 
 function boxAnchors(words, priceCand) {
@@ -314,7 +318,7 @@ function boxAnchors(words, priceCand) {
   return anchors;
 }
 
-/** Name words whose boxes sit next to the chosen price, or next to a nearby 價 label. */
+/** Among word boxes next to the chosen price or a nearby 價 label, the most Chinese characters win. */
 function productNameNearBoxes(words, priceCand) {
   if (!words || !words.length) return "";
   const anchors = boxAnchors(words, priceCand);
@@ -366,7 +370,7 @@ function productNameNearBoxes(words, priceCand) {
     for (let j = 0; j < line.items.length; j++) parts.push(line.items[j].desc);
     const name = usableName(joinWordText(parts));
     const cjk = cjkCount(name);
-    if (!name || !preferCloser(line.dist, cjk, bestDist, bestCjk)) continue;
+    if (!name || !preferMostCjk(cjk, line.dist, bestCjk, bestDist)) continue;
     bestDist = line.dist;
     bestCjk = cjk;
     best = name;
@@ -404,7 +408,7 @@ function textAnchorIndexes(lines, priceCand) {
   return indexes;
 }
 
-/** No boxes: the name is the closest qualifying line to the price or a 價 label. */
+/** No boxes: among lines next to the price or a 價 label, the most Chinese characters win. */
 function productNameNearLines(text, priceCand) {
   const raw = collapseCjkSpaces(String(text || ""));
   const lines = raw.split(/\n/);
@@ -422,7 +426,8 @@ function productNameNearLines(text, priceCand) {
       const d = Math.abs(i - anchors[a]);
       if (d < dist) dist = d;
     }
-    if (!preferCloser(dist, cjk, bestDist, bestCjk)) continue;
+    if (dist > NEAR_LINE_DIST) continue;
+    if (!preferMostCjk(cjk, dist, bestCjk, bestDist)) continue;
     bestDist = dist;
     bestCjk = cjk;
     best = name;
@@ -432,8 +437,8 @@ function productNameNearLines(text, priceCand) {
 
 /**
  * Whole-pack photos: branding is the longest Chinese line, the shelf name sits by the price.
- * Use Vision boxes when we have them, otherwise the nearest text line.
- * The old longest-line guess runs only when there is no price or 價 anchor, or no name beside it.
+ * Inside the region next to the price or a 價 label, the most Chinese characters win.
+ * The old whole-image guess runs only when that region has no usable name.
  */
 function chooseProductName(text, words, priceCand) {
   const nearBox = productNameNearBoxes(words, priceCand);
