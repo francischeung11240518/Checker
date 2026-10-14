@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>價牌上載（內部試點）</title>
+<style>
+  :root {
+    --ink: #1c1915;
+    --muted: #6b645c;
+    --paper: #f6f1e8;
+    --card: #fffdf8;
+    --line: #e4d9c8;
+    --green: #1f6b45;
+    --chip: #efe6d6;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    font-family: "PingFang HK", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+    line-height: 1.45;
+  }
+  main { max-width: 40rem; margin: 0 auto; padding: 1.1rem 1rem 3rem; }
+  h1 { font-size: 1.55rem; margin: 0 0 0.35rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.2rem; margin: 0 0 0.45rem; }
+  .note { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.92rem; }
+  .tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #9a3412;
+    background: #fde8d8;
+    border-radius: 999px;
+    padding: 0.08rem 0.5rem;
+    margin: 0 0 0.45rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 0.9rem 1rem 1rem;
+    margin: 0 0 0.75rem;
+  }
+  button, .file-btn {
+    font: inherit;
+    font-size: 1rem;
+    min-height: 48px;
+    padding: 0.55rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--chip);
+    color: var(--ink);
+    cursor: pointer;
+    text-align: center;
+  }
+  button.primary, .file-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    background: var(--green);
+    color: #fffdf8;
+    border: 2px solid #145334;
+    font-weight: 700;
+  }
+  button.ghost { background: transparent; width: 100%; margin-top: 0.55rem; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus, label:focus-within, input:focus { outline: 3px solid #f0c36a; }
+  label.field { display: block; margin: 0.8rem 0 0; font-weight: 650; }
+  label.field span.hint {
+    display: block;
+    font-weight: 450;
+    color: var(--muted);
+    font-size: 0.88rem;
+    margin-top: 0.15rem;
+  }
+  input[type="text"], input[type="email"] {
+    width: 100%;
+    font: inherit;
+    font-size: 1.05rem;
+    margin-top: 0.3rem;
+    padding: 0.7rem 0.8rem;
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    background: white;
+  }
+  .file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+  img.preview {
+    width: 100%;
+    max-height: 320px;
+    object-fit: contain;
+    background: #1c1915;
+    border-radius: 14px;
+    margin: 0.8rem 0 0;
+  }
+  .warn { color: #9a3412; font-weight: 650; }
+  .status { font-weight: 700; color: var(--green); }
+</style>
+</head>
+<body>
+<main>
+  <p class="tag">內部試點</p>
+  <h1>價牌上載</h1>
+
+  <section id="closed">
+    <p class="note">呢個頁面未對公眾開放。搜尋同本機上報照舊用，唔使登入。</p>
+  </section>
+
+  <section id="open" hidden>
+    <p class="note">影一張超市價牌，或者由相簿揀。相會交俾管理員睇。呢頁唔會喺你部手機認字，亦唔使開帳號。暱稱同電郵都可以留空。拒絕結果暫時唔會通知你。</p>
+    <p id="urlMissing" class="warn" hidden>未設定上載位址，暫時交唔到相。</p>
+    <form id="form" class="card">
+      <!--
+        One file input. The capture attribute is omitted on purpose: setting it
+        opens the camera only and hides the gallery on Android.
+      -->
+      <label class="file-btn" for="photo">影相或從相簿揀</label>
+      <input id="photo" class="file-input" type="file" accept="image/*">
+      <img id="preview" class="preview" alt="已選價牌" hidden>
+      <label class="field">暱稱（可留空）
+        <span class="hint">方便管理員認得你，唔係帳號。</span>
+        <input id="nickname" type="text" maxlength="40" autocomplete="nickname">
+      </label>
+      <label class="field">電郵（可留空）
+        <span class="hint">只俾管理員睇。而家唔會用嚟發電郵。</span>
+        <input id="email" type="email" maxlength="120" autocomplete="email" inputmode="email">
+      </label>
+      <p id="formError" class="warn" hidden></p>
+      <button id="send" class="primary" type="submit" style="margin-top:0.9rem">上傳價牌</button>
+    </form>
+  </section>
+
+  <section id="done" hidden>
+    <h2 class="status">已上傳</h2>
+    <p class="note">管理員會睇呢張相。你唔使再做，亦未有帳號。拒絕暫時唔會通知你。</p>
+    <p id="doneWhen" class="note"></p>
+    <button id="again" class="ghost" type="button">再上傳一張</button>
+  </section>
+</main>
+<script src="upload.js"></script>
+<script>
+(function () {
+  const Gate = window.CheckerPhotoUpload;
+  const closed = document.getElementById("closed");
+  const open = document.getElementById("open");
+  const done = document.getElementById("done");
+  const form = document.getElementById("form");
+  const photo = document.getElementById("photo");
+  const preview = document.getElementById("preview");
+  const formError = document.getElementById("formError");
+  const urlMissing = document.getElementById("urlMissing");
+  const send = document.getElementById("send");
+  let previewUrl = "";
+  let workerUrl = "";
+
+  function storageGet(key) {
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function storageSet(key, value) {
+    try { localStorage.setItem(key, value); } catch (e) {}
+  }
+  function storageRemove(key) {
+    try { localStorage.removeItem(key); } catch (e) {}
+  }
+  function showError(text) {
+    formError.hidden = !text;
+    formError.textContent = text || "";
+  }
+
+  const flag = Gate.readFlag(location.search, storageGet);
+  if (flag.persist === "on") storageSet(Gate.FLAG_KEY, "1");
+  if (flag.persist === "off") storageRemove(Gate.FLAG_KEY);
+  if (!flag.enabled) return;
+
+  closed.hidden = true;
+  open.hidden = false;
+  workerUrl = Gate.workerUrlFrom(location.search, storageGet);
+  urlMissing.hidden = !!workerUrl;
+
+  photo.addEventListener("change", function () {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = "";
+    const file = photo.files && photo.files[0];
+    if (!file) {
+      preview.hidden = true;
+      preview.removeAttribute("src");
+      return;
+    }
+    previewUrl = URL.createObjectURL(file);
+    preview.src = previewUrl;
+    preview.hidden = false;
+    showError("");
+  });
+
+  function fileToJpeg(file) {
+    return new Promise(function (resolve, reject) {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = function () {
+        const size = Gate.fitEdge(img.naturalWidth, img.naturalHeight, Gate.MAX_EDGE);
+        const canvas = document.createElement("canvas");
+        canvas.width = size.w;
+        canvas.height = size.h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, size.w, size.h);
+        canvas.toBlob(function (blob) {
+          URL.revokeObjectURL(url);
+          if (!blob) reject(new Error("encode"));
+          else resolve(blob);
+        }, "image/jpeg", 0.82);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error("decode"));
+      };
+      img.src = url;
+    });
+  }
+
+  document.getElementById("again").addEventListener("click", function () {
+    done.hidden = true;
+    open.hidden = false;
+    form.reset();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = "";
+    preview.hidden = true;
+    preview.removeAttribute("src");
+    showError("");
+  });
+
+  form.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    showError("");
+    if (!workerUrl) {
+      showError("未設定上載位址，暫時交唔到相。");
+      return;
+    }
+    const file = photo.files && photo.files[0];
+    if (!file) {
+      showError("請先影相或由相簿揀一張。");
+      return;
+    }
+    const contact = Gate.normalizeContact(
+      document.getElementById("nickname").value,
+      document.getElementById("email").value
+    );
+    if (contact.error) {
+      showError("暱稱或電郵格式不正確。兩項都可以留空。");
+      return;
+    }
+    send.disabled = true;
+    send.textContent = "上傳緊…";
+    try {
+      let blob = file;
+      let name = file.name || "tag.jpg";
+      if (Gate.shouldReencode(file.type, file.size)) {
+        try {
+          blob = await fileToJpeg(file);
+          name = "tag.jpg";
+        } catch (e) {
+          showError("呢張相讀唔到。請改用 jpeg 或 png。");
+          return;
+        }
+      }
+      if (blob.size > Gate.MAX_UPLOAD_BYTES) {
+        showError("圖片太大。請影清楚張價牌，唔好傳成張相簿原圖。");
+        return;
+      }
+      const body = new FormData();
+      body.append("image", blob, name);
+      body.append("nickname", contact.nickname);
+      body.append("email", contact.email);
+      const endpoint = new URL("/upload", workerUrl).toString();
+      let res;
+      try {
+        res = await fetch(endpoint, { method: "POST", body: body });
+      } catch (e) {
+        showError("連唔上上載服務。");
+        return;
+      }
+      let data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok || !data || data.ok !== true) {
+        showError((data && data.message) || "上傳失敗，請稍後再試。");
+        return;
+      }
+      open.hidden = true;
+      done.hidden = false;
+      const when = data.createdAt ? new Date(data.createdAt) : null;
+      document.getElementById("doneWhen").textContent = when && !Number.isNaN(when.getTime())
+        ? "時間：" + new Intl.DateTimeFormat("zh-HK", {
+          timeZone: "Asia/Hong_Kong",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(when)
+        : "";
+    } finally {
+      send.disabled = false;
+      send.textContent = "上傳價牌";
+    }
+  });
+})();
+</script>
+</body>
+</html>

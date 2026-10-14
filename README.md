@@ -23,3 +23,9 @@
 公眾頁只用瀏覽器認字，唔會上傳價牌。內部試點先本機、讀唔到先可選雲端預填，每月 Vision 用量硬封頂 US$15，而且要你同意先會傳裁好嘅小圖。未完成法律閘門之前唔對公眾開放。
 
 說明：[`docs/vision-ocr-internal-pilot.md`](docs/vision-ocr-internal-pilot.md)。Worker：[`workers/vision-ocr/README.md`](workers/vision-ocr/README.md)。
+
+## 價牌上載審核（內部骨架，預設關閉）
+
+用家影價牌上傳，管理員再睇相、可選雲端預填，然後通過或拒絕。搜尋頁未有入口。用家頁唔會喺手機認字。未有登入，拒絕亦未會通知。
+
+說明：[`docs/photo-upload-internal-pilot.md`](docs/photo-upload-internal-pilot.md)。Worker：[`workers/photo-upload/README.md`](workers/photo-upload/README.md)。

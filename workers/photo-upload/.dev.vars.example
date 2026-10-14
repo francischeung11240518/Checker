@@ -1,0 +1,6 @@
+# Copy to .dev.vars for `npx wrangler dev`. Never commit .dev.vars.
+# This value is a local placeholder, not a production key.
+UPLOAD_ENABLED=true
+ADMIN_KEY=local-dev-only-not-a-real-secret
+# Point at a locally running checker-vision-ocr, or leave empty to skip prefill.
+VISION_OCR_URL=http://127.0.0.1:8788
