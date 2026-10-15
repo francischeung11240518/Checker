@@ -5,7 +5,8 @@
  * Audit lines are counts and status — never the image or the API secret.
  */
 import { visionAuth } from "./auth.js";
-import { decodeImageBase64, parseVisionResponse, sniffMime, bytesToBase64 } from "./parse.js";
+import { decodeImageBase64, sniffMime, bytesToBase64 } from "./parse.js";
+import { ocrProfileForStore, parseWithProfile } from "./profile.js";
 import {
   consentAccepted,
   dailyCap,
@@ -138,6 +139,8 @@ async function readPayload(request, env) {
       consentSource: "multipart",
       bytes: bytes,
       base64: bytesToBase64(bytes),
+      storeId: form.get("storeId"),
+      storeName: form.get("storeName"),
     };
   }
   const buf = await request.arrayBuffer();
@@ -157,6 +160,8 @@ async function readPayload(request, env) {
     consentSource: "json",
     bytes: decoded.bytes,
     base64: decoded.base64,
+    storeId: body.storeId,
+    storeName: body.storeName,
   };
 }
 
@@ -255,7 +260,8 @@ export async function handleRequest(request, env, deps) {
       monthCount: slot.month,
     });
   }
-  const parsed = parseVisionResponse(vision.data);
+  const profile = ocrProfileForStore(payload.storeId, payload.storeName);
+  const parsed = parseWithProfile(profile, vision.data);
   audit({
     ok: true,
     bytes: payload.bytes.byteLength,
@@ -268,6 +274,8 @@ export async function handleRequest(request, env, deps) {
     price: parsed.price || "",
     offer: parsed.offer || "",
     packSize: parsed.packSize || "",
+    profile: parsed.profile,
+    parser: parsed.parser,
   }, 200, corsOrigin);
 }
 

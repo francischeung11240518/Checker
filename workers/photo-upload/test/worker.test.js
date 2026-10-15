@@ -85,6 +85,10 @@ async function uploadJpeg(env, fields, headers) {
   form.set("image", file);
   if (fields && fields.nickname != null) form.set("nickname", fields.nickname);
   if (fields && fields.email != null) form.set("email", fields.email);
+  if (!fields || fields.store !== false) {
+    form.set("storeId", fields && fields.storeId != null ? fields.storeId : "");
+    form.set("storeName", fields && fields.storeName != null ? fields.storeName : "萬寧");
+  }
   const h = Object.assign({ origin: PAGES }, headers || {});
   return handleRequest(new Request("https://worker.test/upload", {
     method: "POST",
@@ -160,6 +164,8 @@ test("multipart upload stores the photo and optional contact", async () => {
     const saved = JSON.parse(env.SUBMISSIONS.map.get("sub:" + body.id));
     assert.equal(saved.nickname, "阿明");
     assert.equal(saved.email, "wing-secret@example.com");
+    assert.equal(saved.storeId, "mannings");
+    assert.equal(saved.storeName, "萬寧");
     assert.equal(saved.status, "pending");
     assert.equal(saved.imageKey, "photos/" + body.id + ".jpg");
     assert.equal(env.SUBMISSIONS.map.get("pending:" + body.id), body.createdAt);
@@ -198,6 +204,7 @@ test("json base64 upload and size cap", async () => {
       mimeType: "image/jpeg",
       nickname: "",
       email: "",
+      storeName: "惠康",
     }),
   }), okEnv, { now: NOW });
   assert.equal(res.status, 201);
@@ -205,6 +212,8 @@ test("json base64 upload and size cap", async () => {
   const saved = JSON.parse(okEnv.SUBMISSIONS.map.get("sub:" + body.id));
   assert.equal(saved.nickname, "");
   assert.equal(saved.email, "");
+  assert.equal(saved.storeId, "wellcome");
+  assert.equal(saved.storeName, "惠康");
 });
 
 test("bad contact is rejected and rate limit counts", async () => {
@@ -236,6 +245,8 @@ test("admin list, detail, and image need the shared secret", async () => {
   assert.equal(listed.items.length, 1);
   assert.equal(listed.items[0].nickname, "阿明");
   assert.equal(listed.items[0].email, "a@example.com");
+  assert.equal(listed.items[0].storeId, "mannings");
+  assert.equal(listed.items[0].storeName, "萬寧");
   assert.equal(listed.items[0].createdAt, created.createdAt);
   assert.equal(listed.items[0].imageKey, undefined);
 
@@ -316,6 +327,8 @@ test("approve writes a publish stub and does not touch a second time", async () 
   assert.match(body.publishStub.nextStep, /未寫入產品庫/);
   assert.equal(body.publishStub.productName, "維他奶");
   assert.equal(body.publishStub.price, "8.5");
+  assert.equal(body.publishStub.storeId, "mannings");
+  assert.equal(body.publishStub.storeName, "萬寧");
   const queue = JSON.parse(env.SUBMISSIONS.map.get("publish-queue"));
   assert.equal(queue.length, 1);
   assert.equal(queue[0].id, created.id);
@@ -357,6 +370,8 @@ test("ocr prefill calls checker-vision-ocr and does not call Google directly", a
   const sent = JSON.parse(calls[0].init.body);
   assert.equal(sent.consent, true);
   assert.equal(sent.mimeType, "image/jpeg");
+  assert.equal(sent.storeId, "mannings");
+  assert.equal(sent.storeName, "萬寧");
   assert.equal(typeof sent.imageBase64, "string");
   assert.equal(body.item.productName, "紫花油");
   assert.equal(body.item.price, "49.9");
@@ -466,6 +481,81 @@ test("health hides the admin key and reports the kill switch", async () => {
   assert.equal(body.ocrConfigured, false);
   assert.equal(body.ocrViaBinding, false);
   assert.equal(JSON.stringify(body).includes("test-admin-key"), false);
+});
+
+test("upload requires a supermarket and keeps the first spelling", async () => {
+  const env = baseEnv();
+  const missing = await uploadJpeg(env, { store: false });
+  assert.equal(missing.status, 400);
+  assert.equal((await missing.json()).error, "store_required");
+  assert.equal(env.PHOTOS.map.size, 0);
+
+  const blank = await uploadJpeg(env, { storeName: "   " });
+  assert.equal((await blank.json()).error, "store_required");
+
+  const mannings = await (await uploadJpeg(env, { storeName: "  Mannings " })).json();
+  assert.deepEqual(mannings.store, { id: "mannings", name: "萬寧" });
+
+  const alias = await (await uploadJpeg(env, { storeId: "", storeName: "759" })).json();
+  assert.deepEqual(alias.store, { id: "store759", name: "759阿信屋" });
+
+  const created = await (await uploadJpeg(env, { storeName: "優品360" })).json();
+  assert.equal(created.store.id, "優品360");
+  assert.equal(created.store.name, "優品360");
+  const again = await (await uploadJpeg(env, { storeName: "優品 360" })).json();
+  assert.deepEqual(again.store, { id: "優品360", name: "優品360" });
+
+  const listed = await (await handleRequest(new Request("https://worker.test/stores", {
+    headers: { origin: PAGES },
+  }), env, { now: NOW })).json();
+  const custom = listed.stores.filter(function (row) { return row.id === "優品360"; });
+  assert.equal(custom.length, 1);
+  assert.equal(custom[0].name, "優品360");
+  assert.equal(listed.stores.some(function (row) { return row.id === "mannings" && row.name === "萬寧"; }), true);
+  assert.equal(listed.stores.some(function (row) { return row.name === "優品 360"; }), false);
+  assert.equal(JSON.stringify(listed).includes("@"), false);
+
+  const filtered = await (await handleRequest(new Request("https://worker.test/submissions?status=pending&store=store759", {
+    headers: adminHeaders(),
+  }), env, { now: NOW })).json();
+  assert.equal(filtered.items.length, 1);
+  assert.equal(filtered.items[0].storeName, "759阿信屋");
+
+  const off = await (await handleRequest(new Request("https://worker.test/stores", {
+    headers: { origin: PAGES },
+  }), baseEnv({ UPLOAD_ENABLED: "false" }), { now: NOW })).json();
+  assert.equal(off.ok, true);
+  assert.equal(off.stores[0].id, "mannings");
+});
+
+test("ocr prefill forwards the submission supermarket for profile selection", async () => {
+  const env = baseEnv({ VISION_OCR_URL: "https://checker-vision-ocr.example.workers.dev/" });
+  const created = await (await uploadJpeg(env, { storeId: "parknshop", storeName: "百佳" })).json();
+  const calls = [];
+  const res = await handleRequest(new Request("https://worker.test/submissions/" + created.id + "/ocr", {
+    method: "POST",
+    headers: adminHeaders(),
+  }), env, {
+    now: NOW,
+    fetch: async function (url, init) {
+      calls.push(JSON.parse(init.body));
+      return new Response(JSON.stringify({
+        ok: true,
+        productName: "維他奶",
+        price: "8.5",
+        offer: "",
+        profile: "parknshop",
+        parser: "mannings",
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+  const body = await res.json();
+  assert.equal(calls[0].storeId, "parknshop");
+  assert.equal(calls[0].storeName, "百佳");
+  assert.equal(body.profile, "parknshop");
+  assert.equal(body.parser, "mannings");
+  assert.equal(body.item.ocrProfile, "parknshop");
+  assert.equal(body.item.ocrParser, "mannings");
 });
 
 test("config keeps the upload switch off and does not embed secrets", () => {
