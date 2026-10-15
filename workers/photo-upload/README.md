@@ -13,7 +13,7 @@ This pull request does not deploy the Worker. Create the R2 bucket, KV namespace
 | Binding | Kind | Name |
 |---|---|---|
 | `PHOTOS` | R2 | bucket `checker-price-tags` |
-| `SUBMISSIONS` | KV | metadata, `pending:{id}`, `publish-queue` |
+| `SUBMISSIONS` | KV | metadata, `pending:{id}`, `publish-queue`, `stores:custom` |
 | `VISION_OCR` | service | Worker `checker-vision-ocr` |
 | `ADMIN_KEY` | secret | header `X-Admin-Key` |
 
@@ -58,9 +58,31 @@ npx wrangler dev
 
 If `wrangler dev` rejects the placeholder KV id, create the namespace and paste the real id first. Local dev still uses simulated storage unless you pass `--remote`.
 
+## 超市 / Supermarket
+
+上傳一定要帶超市。`storeId` 同 `storeName` 可以喺 multipart 或 JSON。空白會回 `store_required`（「請先揀超市。」）。
+
+Every upload must include a supermarket (`storeId` and/or `storeName`, multipart or JSON). A blank value returns `store_required`.
+
+種子清單用返程式入面已有嘅中文名（萬寧、屈臣氏、百佳、惠康、AEON、Market Place、龍豐、大昌、莎莎），再加一田同 759阿信屋。別名唔分大小寫同空格，例如 `Mannings`、`759` 會用返第一次見到嘅顯示名。
+
+The seed list reuses the app's existing Chinese names, plus 一田 and 759阿信屋. Matching ignores case and spaces and keeps the first-seen spelling.
+
+`GET /stores` 唔使管理員金鑰，回種子加 KV 入面用家加過嘅名（`stores:custom`）。新名喺上傳成功時先寫入，上限 200 個。同名唔會再開一列。
+
+`GET /stores` needs no admin key. It returns the seed plus names saved from successful uploads. New names are written on upload, capped at 200, and duplicates do not create a second row.
+
+管理員清單會顯示超市，可以用 `GET /submissions?status=pending&store=<id>` 篩選。
+
+The admin list shows the supermarket. Filter with `store` on the submissions query.
+
+跑 OCR 時，呢個 Worker 會把該筆嘅 `storeId` / `storeName` 交俾 `checker-vision-ocr`。邊個 parser 由 vision-ocr 揀，見 [`../vision-ocr/README.md`](../vision-ocr/README.md) 嘅「超市認字檔案」。
+
+OCR prefill forwards that submission's store. Profile selection lives in the vision-ocr Worker.
+
 ## Routes
 
-`POST /upload` is public to the GitHub Pages origin and localhost, and it is still behind `UPLOAD_ENABLED`.
+`POST /upload` is public to the GitHub Pages origin and localhost, and it is still behind `UPLOAD_ENABLED`. `GET /stores` is public to those same origins and does not require `UPLOAD_ENABLED`.
 
 Admin routes require `X-Admin-Key`: list, detail, image, `PATCH` (`approve` / `reject` / `save`), `POST .../ocr`, `GET /publish-queue`.
 

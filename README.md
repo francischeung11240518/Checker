@@ -26,6 +26,6 @@
 
 ## 價牌上載審核（內部骨架，預設關閉）
 
-用家影價牌上傳，管理員再睇相、可選雲端預填，然後通過或拒絕。搜尋頁未有入口。用家頁唔會喺手機認字。未有登入，拒絕亦未會通知。
+用家先揀超市（清單未有可以自己加），再影價牌上傳。管理員再睇相、可選雲端預填，然後通過或拒絕。搜尋頁未有入口。用家頁唔會喺手機認字。未有登入，拒絕亦未會通知。
 
 說明：[`docs/photo-upload-internal-pilot.md`](docs/photo-upload-internal-pilot.md)。Worker：[`workers/photo-upload/README.md`](workers/photo-upload/README.md)。

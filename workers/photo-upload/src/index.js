@@ -9,6 +9,13 @@ import { killSwitchEnabled, maxImageBytes, originAllowed } from "../../vision-oc
 import { adminKeyMatches } from "./auth.js";
 import { clipText, normalizeContact } from "./contact.js";
 import { ocrEndpoint } from "./url.js";
+import {
+  CUSTOM_STORES_KEY,
+  mergeCustomStore,
+  publicStores,
+  readCustomStoreList,
+  resolveStoreInput,
+} from "./stores.js";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXT = {
@@ -25,6 +32,8 @@ const MESSAGES = {
   unsupported_type: "只接受 jpeg、png、webp 或 gif。",
   bad_request: "請求不正確。",
   bad_contact: "暱稱或電郵格式不正確。兩項都可以留空。",
+  store_required: "請先揀超市。",
+  store_too_long: "超市名太長。",
   rate_limited: "上傳太密，請稍後再試。",
   method: "不支援呢個方法。",
   not_found: "搵唔到呢筆上載。",
@@ -75,6 +84,7 @@ function audit(entry) {
     id: entry.id || "",
     bytes: Number(entry.bytes) || 0,
     status: entry.status || "",
+    store: entry.store || "",
   }));
 }
 
@@ -132,6 +142,8 @@ function toAdminItem(rec, detail) {
     createdAt: rec.createdAt,
     nickname: rec.nickname || "",
     email: rec.email || "",
+    storeId: rec.storeId || "",
+    storeName: rec.storeName || "",
     status: rec.status,
     contentType: rec.contentType || "",
     byteLength: Number(rec.byteLength) || 0,
@@ -144,6 +156,8 @@ function toAdminItem(rec, detail) {
     item.rawText = rec.rawText || "";
     item.ocrAt = rec.ocrAt || "";
     item.ocrError = rec.ocrError || "";
+    item.ocrProfile = rec.ocrProfile || "";
+    item.ocrParser = rec.ocrParser || "";
     item.publishStub = rec.publishStub || null;
     item.notified = false;
   }
@@ -181,6 +195,13 @@ async function listPrefix(env, prefix) {
   return names;
 }
 
+function storeMatches(rec, filter) {
+  if (!filter) return true;
+  const id = String(rec && rec.storeId || "").trim().toLowerCase();
+  const name = String(rec && rec.storeName || "").trim().toLowerCase();
+  return id === filter || name === filter;
+}
+
 function maxBodyBytes(env) {
   const image = maxImageBytes(env);
   return Math.max(image + 8192, Math.floor(image * 1.4 + 16384));
@@ -206,7 +227,14 @@ async function readUpload(request, env) {
     const bytes = new Uint8Array(buf);
     const mime = sniffMime(bytes);
     if (!mime) return { error: "unsupported_type" };
-    return { bytes: bytes, mime: mime, nickname: form.get("nickname"), email: form.get("email") };
+    return {
+      bytes: bytes,
+      mime: mime,
+      nickname: form.get("nickname"),
+      email: form.get("email"),
+      storeId: form.get("storeId"),
+      storeName: form.get("storeName"),
+    };
   }
   if (!ctype.includes("application/json")) return { error: "bad_request" };
   const buf = await request.arrayBuffer();
@@ -226,7 +254,14 @@ async function readUpload(request, env) {
     mime: decoded.mime,
     nickname: body.nickname,
     email: body.email,
+    storeId: body.storeId,
+    storeName: body.storeName,
   };
+}
+
+async function loadCustomStores(env) {
+  const raw = await env.SUBMISSIONS.get(CUSTOM_STORES_KEY);
+  return readCustomStoreList(raw);
 }
 
 async function allowUpload(env, request, now) {
@@ -291,6 +326,15 @@ async function upload(request, env, now, origin) {
   const contact = normalizeContact(payload.nickname, payload.email);
   if (contact.error) return fail(contact.error, 400, origin, { op: "upload", bytes: payload.bytes.byteLength });
 
+  let custom = [];
+  try {
+    custom = await loadCustomStores(env);
+  } catch (e) {
+    return fail("store_failed", 503, origin, { op: "upload", bytes: payload.bytes.byteLength });
+  }
+  const chosen = resolveStoreInput(payload.storeId, payload.storeName, custom);
+  if (chosen.error) return fail(chosen.error, 400, origin, { op: "upload", bytes: payload.bytes.byteLength });
+
   const id = crypto.randomUUID();
   const createdAt = now.toISOString();
   const ext = EXT[payload.mime] || "img";
@@ -300,6 +344,8 @@ async function upload(request, env, now, origin) {
     createdAt: createdAt,
     nickname: contact.nickname,
     email: contact.email,
+    storeId: chosen.id,
+    storeName: chosen.name,
     imageKey: imageKey,
     contentType: payload.mime,
     byteLength: payload.bytes.byteLength,
@@ -319,20 +365,43 @@ async function upload(request, env, now, origin) {
     });
     await writeRecord(env, rec);
     await env.SUBMISSIONS.put("pending:" + id, createdAt);
+    if (chosen.created) {
+      const latest = await loadCustomStores(env);
+      const merged = mergeCustomStore(latest, chosen, createdAt);
+      if (merged.added) await env.SUBMISSIONS.put(CUSTOM_STORES_KEY, JSON.stringify(merged.list));
+      if (merged.store && (merged.store.id !== rec.storeId || merged.store.name !== rec.storeName)) {
+        rec.storeId = merged.store.id;
+        rec.storeName = merged.store.name;
+        await writeRecord(env, rec);
+      }
+    }
   } catch (e) {
     try {
       if (typeof env.PHOTOS.delete === "function") await env.PHOTOS.delete(imageKey);
     } catch (ignore) { /* orphan image is preferable to a thrown response */ }
     return fail("store_failed", 503, origin, { op: "upload", id: id, bytes: payload.bytes.byteLength });
   }
-  audit({ ok: true, op: "upload", id: id, bytes: payload.bytes.byteLength, status: "pending" });
+  audit({ ok: true, op: "upload", id: id, bytes: payload.bytes.byteLength, status: "pending", store: rec.storeId });
   return json({
     ok: true,
     id: id,
     createdAt: createdAt,
     status: "pending",
+    store: { id: rec.storeId, name: rec.storeName },
     message: "已上傳。管理員會睇，你唔使再做。",
   }, 201, origin);
+}
+
+async function listStores(env, origin) {
+  let custom = [];
+  if (env && env.SUBMISSIONS && typeof env.SUBMISSIONS.get === "function") {
+    try {
+      custom = await loadCustomStores(env);
+    } catch (e) {
+      custom = [];
+    }
+  }
+  return json({ ok: true, stores: publicStores(custom) }, 200, origin);
 }
 
 async function listSubmissions(request, env, url, origin) {
@@ -343,13 +412,14 @@ async function listSubmissions(request, env, url, origin) {
   if (status !== "pending" && status !== "approved" && status !== "rejected" && status !== "all") {
     return fail("bad_request", 400, origin, { op: "list" });
   }
+  const storeFilter = String(url.searchParams.get("store") || "").trim().toLowerCase();
   let records = [];
   if (status === "pending") {
     const names = await listPrefix(env, "pending:");
     for (let i = 0; i < names.length; i++) {
       const id = names[i].slice("pending:".length);
       const rec = await readRecord(env, id);
-      if (rec && rec.status === "pending") records.push(rec);
+      if (rec && rec.status === "pending" && storeMatches(rec, storeFilter)) records.push(rec);
     }
   } else {
     const names = await listPrefix(env, "sub:");
@@ -357,7 +427,7 @@ async function listSubmissions(request, env, url, origin) {
       const id = names[i].slice("sub:".length);
       const rec = await readRecord(env, id);
       if (!rec) continue;
-      if (status === "all" || rec.status === status) records.push(rec);
+      if ((status === "all" || rec.status === status) && storeMatches(rec, storeFilter)) records.push(rec);
     }
   }
   records.sort(function (a, b) {
@@ -469,6 +539,8 @@ async function patchSubmission(request, env, id, now, origin) {
       offer: rec.offer,
       nickname: rec.nickname,
       email: rec.email,
+      storeId: rec.storeId || "",
+      storeName: rec.storeName || "",
       imageKey: rec.imageKey,
       source: "photo-upload",
       nextStep: PUBLISH_NEXT,
@@ -531,6 +603,8 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
         consent: true,
         mimeType: rec.contentType,
         imageBase64: bytesToBase64(bytes),
+        storeId: rec.storeId || "",
+        storeName: rec.storeName || "",
       }),
     };
     if (binding) {
@@ -581,6 +655,8 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
   rec.rawText = "";
   rec.ocrError = "";
   rec.ocrAt = now.toISOString();
+  rec.ocrProfile = clipText(data.profile, 40);
+  rec.ocrParser = clipText(data.parser, 40);
   await writeRecord(env, rec);
   audit({ ok: true, op: "ocr", id: id, bytes: bytes.byteLength, status: rec.status });
   return json({
@@ -589,6 +665,8 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
     rawText: "",
     ocrVia: "checker-vision-ocr",
     ocrViaBinding: !!binding,
+    profile: rec.ocrProfile,
+    parser: rec.ocrParser,
     item: toAdminItem(rec, true),
   }, 200, origin);
 }
@@ -628,6 +706,7 @@ export async function handleRequest(request, env, deps) {
 
   try {
     if (path === "/" && request.method === "GET") return health(env, corsOrigin);
+    if (path === "/stores" && request.method === "GET") return listStores(env, corsOrigin);
     if (path === "/upload" && request.method === "POST") return upload(request, env, now, corsOrigin);
     if (path === "/submissions" && request.method === "GET") return listSubmissions(request, env, url, corsOrigin);
     if (path === "/publish-queue" && request.method === "GET") return publishQueue(request, env, corsOrigin);
@@ -649,7 +728,7 @@ export async function handleRequest(request, env, deps) {
       if (request.method === "PATCH") return patchSubmission(request, env, id, now, corsOrigin);
       return fail("method", 405, corsOrigin);
     }
-    if (path === "/upload" || path === "/submissions" || path === "/publish-queue" || path === "/") {
+    if (path === "/upload" || path === "/submissions" || path === "/publish-queue" || path === "/stores" || path === "/") {
       return fail("method", 405, corsOrigin);
     }
     return fail("not_found", 404, corsOrigin);

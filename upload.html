@@ -69,7 +69,12 @@
   }
   button.ghost { background: transparent; width: 100%; margin-top: 0.55rem; }
   button:disabled { opacity: 0.45; cursor: not-allowed; }
-  button:focus, label:focus-within, input:focus { outline: 3px solid #f0c36a; }
+  button[aria-pressed="true"] {
+    background: #e5f4ea;
+    border-color: var(--green);
+    font-weight: 700;
+  }
+  button:focus, label:focus-within, input:focus, select:focus { outline: 3px solid #f0c36a; }
   label.field { display: block; margin: 0.8rem 0 0; font-weight: 650; }
   label.field span.hint {
     display: block;
@@ -78,7 +83,22 @@
     font-size: 0.88rem;
     margin-top: 0.15rem;
   }
-  input[type="text"], input[type="email"] {
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0.55rem 0 0.2rem;
+    max-height: 16.5rem;
+    overflow: auto;
+  }
+  .choices > button, #confirmStore, #addStoreBtn { width: 100%; text-align: left; border-radius: 12px; }
+  #confirmStore, #addStoreBtn { text-align: center; }
+  .file-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  input[type="text"], input[type="email"], input[type="search"] {
     width: 100%;
     font: inherit;
     font-size: 1.05rem;
@@ -120,15 +140,33 @@
   </section>
 
   <section id="open" hidden>
-    <p class="note">影一張超市價牌，或者由相簿揀。相會交俾管理員睇。呢頁唔會喺你部手機認字，亦唔使開帳號。暱稱同電郵都可以留空。拒絕結果暫時唔會通知你。</p>
+    <p class="note">先揀邊間超市，再影一張價牌，或者由相簿揀。相會交俾管理員睇。呢頁唔會喺你部手機認字，亦唔使開帳號。暱稱同電郵都可以留空。拒絕結果暫時唔會通知你。</p>
     <p id="urlMissing" class="warn" hidden>未設定上載位址，暫時交唔到相。</p>
     <form id="form" class="card">
+      <h2>邊間超市？</h2>
+      <p class="note">先揀店，先可以影相。清單未有可以自己加，成功上傳之後其他人都會見到。</p>
+      <label class="field" for="storeSearch">搜尋超市
+        <input id="storeSearch" type="search" maxlength="40" autocomplete="off" placeholder="例如 萬寧、759" enterkeyhint="search">
+      </label>
+      <div id="storeList" class="choices" role="listbox" aria-label="超市"></div>
+      <p id="storeChosen" class="status" hidden></p>
+      <button id="addStoreBtn" class="ghost" type="button">清單冇？新增超市</button>
+      <div id="addStore" hidden>
+        <label class="field" for="newStore">超市名
+          <span class="hint">確認之後就用呢個名上傳。空白唔會加入清單。</span>
+          <input id="newStore" type="text" maxlength="40" autocomplete="off" placeholder="輸入超市名">
+        </label>
+        <button id="confirmStore" type="button">用呢個名</button>
+        <p id="addStoreError" class="warn" hidden></p>
+      </div>
       <!--
         One file input. The capture attribute is omitted on purpose: setting it
         opens the camera only and hides the gallery on Android.
+        Disabled until a supermarket is chosen.
       -->
-      <label class="file-btn" for="photo">影相或從相簿揀</label>
-      <input id="photo" class="file-input" type="file" accept="image/*">
+      <p id="photoHint" class="note">揀咗超市先可以影相或揀相。</p>
+      <label class="file-btn" id="photoBtn" for="photo" aria-disabled="true">影相或從相簿揀</label>
+      <input id="photo" class="file-input" type="file" accept="image/*" disabled>
       <img id="preview" class="preview" alt="已選價牌" hidden>
       <label class="field">暱稱（可留空）
         <span class="hint">方便管理員認得你，唔係帳號。</span>
@@ -139,13 +177,14 @@
         <input id="email" type="email" maxlength="120" autocomplete="email" inputmode="email">
       </label>
       <p id="formError" class="warn" hidden></p>
-      <button id="send" class="primary" type="submit" style="margin-top:0.9rem">上傳價牌</button>
+      <button id="send" class="primary" type="submit" style="margin-top:0.9rem" disabled>上傳價牌</button>
     </form>
   </section>
 
   <section id="done" hidden>
     <h2 class="status">已上傳</h2>
     <p class="note">管理員會睇呢張相。你唔使再做，亦未有帳號。拒絕暫時唔會通知你。</p>
+    <p id="doneShop" class="note"></p>
     <p id="doneWhen" class="note"></p>
     <button id="again" class="ghost" type="button">再上傳一張</button>
   </section>
@@ -163,8 +202,22 @@
   const formError = document.getElementById("formError");
   const urlMissing = document.getElementById("urlMissing");
   const send = document.getElementById("send");
+  const photoBtn = document.getElementById("photoBtn");
+  const photoHint = document.getElementById("photoHint");
+  const storeSearch = document.getElementById("storeSearch");
+  const storeList = document.getElementById("storeList");
+  const storeChosen = document.getElementById("storeChosen");
+  const addStoreBtn = document.getElementById("addStoreBtn");
+  const addStore = document.getElementById("addStore");
+  const newStore = document.getElementById("newStore");
+  const confirmStore = document.getElementById("confirmStore");
+  const addStoreError = document.getElementById("addStoreError");
   let previewUrl = "";
   let workerUrl = "";
+  let selected = null;
+  let catalog = Gate.SEED_STORES.map(function (row) {
+    return { id: row.id, name: row.name, aliases: (row.aliases || []).slice() };
+  });
 
   function storageGet(key) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
@@ -189,6 +242,114 @@
   open.hidden = false;
   workerUrl = Gate.workerUrlFrom(location.search, storageGet);
   urlMissing.hidden = !!workerUrl;
+
+  function copyStore(row) {
+    return { id: row.id, name: row.name, aliases: (row.aliases || []).slice() };
+  }
+  function setUploadEnabled() {
+    const on = Gate.uploadReady(selected);
+    photo.disabled = !on;
+    photoBtn.setAttribute("aria-disabled", on ? "false" : "true");
+    send.disabled = !on;
+    photoHint.hidden = on;
+    storeChosen.hidden = !on;
+    storeChosen.textContent = on ? "已揀：" + selected.name : "";
+  }
+  function renderStores() {
+    const rows = catalog.filter(function (row) { return Gate.storeMatches(row, storeSearch.value); });
+    storeList.replaceChildren();
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "note";
+      empty.textContent = "搵唔到。可以撳下面新增超市。";
+      storeList.append(empty);
+      return;
+    }
+    rows.forEach(function (row) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.setAttribute("data-store", row.id);
+      btn.setAttribute("aria-pressed", selected && selected.id === row.id ? "true" : "false");
+      btn.textContent = row.name;
+      storeList.append(btn);
+    });
+  }
+  function showAdd(openPanel) {
+    addStore.hidden = !openPanel;
+    addStoreError.hidden = true;
+    addStoreError.textContent = "";
+  }
+  function storeErrorText(code) {
+    return code === "store_too_long" ? "超市名太長。" : "請輸入超市名。";
+  }
+  function chooseStore(choice) {
+    if (choice.created && !catalog.some(function (row) { return row.id === choice.id; })) {
+      catalog.push({ id: choice.id, name: choice.name, aliases: [] });
+    }
+    selected = { id: choice.id, name: choice.name };
+    newStore.value = "";
+    storeSearch.value = "";
+    showAdd(false);
+    renderStores();
+    setUploadEnabled();
+    showError("");
+  }
+
+  renderStores();
+  setUploadEnabled();
+  loadStores();
+
+  storeSearch.addEventListener("input", renderStores);
+  storeSearch.addEventListener("keydown", function (ev) {
+    if (ev.key === "Enter") ev.preventDefault();
+  });
+  storeList.addEventListener("click", function (ev) {
+    const btn = ev.target.closest("[data-store]");
+    if (!btn) return;
+    const id = btn.getAttribute("data-store");
+    const row = catalog.filter(function (item) { return item.id === id; })[0];
+    if (!row) return;
+    chooseStore({ id: row.id, name: row.name, created: false });
+  });
+  addStoreBtn.addEventListener("click", function () {
+    const openPanel = addStore.hidden;
+    showAdd(openPanel);
+    if (openPanel) newStore.focus();
+  });
+  function confirmNewStore() {
+    const choice = Gate.resolveStoreChoice(catalog, "", newStore.value);
+    if (choice.error) {
+      addStoreError.hidden = false;
+      addStoreError.textContent = storeErrorText(choice.error);
+      return;
+    }
+    chooseStore(choice);
+  }
+  confirmStore.addEventListener("click", confirmNewStore);
+  newStore.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Enter") return;
+    ev.preventDefault();
+    confirmNewStore();
+  });
+
+  async function loadStores() {
+    if (!workerUrl) return;
+    let res;
+    try {
+      res = await fetch(new URL("/stores", workerUrl).toString());
+    } catch (e) {
+      return;
+    }
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok || !data || data.ok !== true || !Array.isArray(data.stores) || !data.stores.length) return;
+    const next = data.stores.map(copyStore);
+    if (selected && !next.some(function (row) { return row.id === selected.id; })) {
+      next.push({ id: selected.id, name: selected.name, aliases: [] });
+    }
+    catalog = next;
+    renderStores();
+  }
 
   photo.addEventListener("change", function () {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -239,6 +400,9 @@
     preview.hidden = true;
     preview.removeAttribute("src");
     showError("");
+    showAdd(false);
+    renderStores();
+    setUploadEnabled();
   });
 
   form.addEventListener("submit", async function (ev) {
@@ -246,6 +410,11 @@
     showError("");
     if (!workerUrl) {
       showError("未設定上載位址，暫時交唔到相。");
+      return;
+    }
+    if (!Gate.uploadReady(selected)) {
+      showError("請先揀超市。");
+      setUploadEnabled();
       return;
     }
     const file = photo.files && photo.files[0];
@@ -283,6 +452,8 @@
       body.append("image", blob, name);
       body.append("nickname", contact.nickname);
       body.append("email", contact.email);
+      body.append("storeId", selected.id);
+      body.append("storeName", selected.name);
       const endpoint = new URL("/upload", workerUrl).toString();
       let res;
       try {
@@ -299,6 +470,8 @@
       }
       open.hidden = true;
       done.hidden = false;
+      const shopName = (data.store && data.store.name) || selected.name;
+      document.getElementById("doneShop").textContent = shopName ? "超市：" + shopName : "";
       const when = data.createdAt ? new Date(data.createdAt) : null;
       document.getElementById("doneWhen").textContent = when && !Number.isNaN(when.getTime())
         ? "時間：" + new Intl.DateTimeFormat("zh-HK", {
@@ -312,8 +485,8 @@
         }).format(when)
         : "";
     } finally {
-      send.disabled = false;
       send.textContent = "上傳價牌";
+      setUploadEnabled();
     }
   });
 })();

@@ -53,6 +53,13 @@
     return { pending: "待審核", approved: "已通過", rejected: "已拒絕" }[status] || status;
   }
 
+  function storeLabel(item) {
+    const name = item && item.storeName ? String(item.storeName).trim() : "";
+    if (name) return name;
+    const id = item && item.storeId ? String(item.storeId).trim() : "";
+    return id || "未填超市";
+  }
+
   function formatStamp(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return String(iso || "");
@@ -81,7 +88,8 @@
     const toast = doc.getElementById("toast");
     if (!workerInput || !keyInput || !loadBtn || !list || !detail) return;
 
-    const state = { status: "pending", urls: [] };
+    const state = { status: "pending", store: "", urls: [], storeOptions: {} };
+    const storeFilter = doc.getElementById("storeFilter");
 
     function sessionGet(key) {
       try { return sessionStorage.getItem(key) || ""; } catch (e) { return ""; }
@@ -197,11 +205,13 @@
         text.className = "rowtext";
         const title = doc.createElement("strong");
         title.textContent = formatStamp(item.createdAt);
+        const shop = doc.createElement("span");
+        shop.textContent = storeLabel(item);
         const nick = doc.createElement("span");
         nick.textContent = item.nickname ? item.nickname : "未填暱稱";
         const mail = doc.createElement("span");
         mail.textContent = item.email ? item.email : "未留電郵";
-        text.append(title, nick, mail);
+        text.append(title, shop, nick, mail);
         btn.append(img, text);
         list.append(btn);
       });
@@ -221,7 +231,9 @@
       }
       loadBtn.disabled = true;
       try {
-        const out = await api("/submissions?status=" + encodeURIComponent(state.status), {
+        let path = "/submissions?status=" + encodeURIComponent(state.status);
+        if (state.store) path += "&store=" + encodeURIComponent(state.store);
+        const out = await api(path, {
           headers: authHeaders(false),
         });
         if (out.res.status === 401) {
@@ -233,7 +245,12 @@
           return;
         }
         remember();
-        renderList(out.data.items || []);
+        const items = out.data.items || [];
+        items.forEach(function (item) {
+          if (item && item.storeId) state.storeOptions[item.storeId] = storeLabel(item);
+        });
+        paintStoreOptions();
+        renderList(items);
       } catch (e) {
         setError(e && e.message === "bad-url" ? "上載服務位址不正確。" : "連唔上上載服務。");
       } finally {
@@ -279,11 +296,12 @@
       img.className = "shot";
       img.alt = "價牌";
       const when = line("時間", formatStamp(item.createdAt));
+      const shop = line("超市", storeLabel(item));
       const who = line("暱稱", item.nickname);
       const mail = line("電郵", item.email);
       const stateLine = line("狀態", statusLabel(item.status));
 
-      detail.append(back, img, when, who, mail, stateLine);
+      detail.append(back, img, when, shop, who, mail, stateLine);
 
       try {
         const photo = await api("/submissions/" + id + "/image", { headers: authHeaders(false) });
@@ -429,6 +447,49 @@
       });
     }
 
+    function paintStoreOptions() {
+      if (!storeFilter) return;
+      const current = state.store || "";
+      const ids = Object.keys(state.storeOptions);
+      storeFilter.replaceChildren();
+      const all = doc.createElement("option");
+      all.value = "";
+      all.textContent = "全部超市";
+      storeFilter.append(all);
+      ids.forEach(function (id) {
+        const opt = doc.createElement("option");
+        opt.value = id;
+        opt.textContent = state.storeOptions[id] || id;
+        storeFilter.append(opt);
+      });
+      if (current && !state.storeOptions[current]) {
+        const extra = doc.createElement("option");
+        extra.value = current;
+        extra.textContent = current;
+        storeFilter.append(extra);
+      }
+      storeFilter.value = current;
+    }
+
+    async function loadStoreOptions() {
+      try {
+        const out = await api("/stores", { headers: authHeaders(false) });
+        if (!out.res.ok || !out.data || !out.data.ok || !Array.isArray(out.data.stores)) return;
+        out.data.stores.forEach(function (row) {
+          if (row && row.id) state.storeOptions[row.id] = row.name || row.id;
+        });
+        paintStoreOptions();
+      } catch (e) { /* the status list still works without the shared catalogue */ }
+    }
+
+    if (storeFilter) {
+      storeFilter.addEventListener("change", function () {
+        state.store = storeFilter.value;
+        showToast("");
+        loadList();
+      });
+    }
+
     filters.addEventListener("click", function (ev) {
       const btn = ev.target.closest("[data-status]");
       if (!btn) return;
@@ -450,14 +511,14 @@
 
     loadBtn.addEventListener("click", function () {
       showToast("");
-      loadList();
+      loadStoreOptions().then(loadList);
     });
     const setupForm = doc.getElementById("setupForm");
     if (setupForm) {
       setupForm.addEventListener("submit", function (ev) {
         ev.preventDefault();
         showToast("");
-        loadList();
+        loadStoreOptions().then(loadList);
       });
     }
     forgetBtn.addEventListener("click", function () {
@@ -489,6 +550,7 @@
           const h = doc.createElement("h2");
           h.textContent = stub.productName || "未填產品名";
           card.append(h);
+          card.append(line("超市", storeLabel(stub)));
           card.append(line("價錢", stub.price));
           card.append(line("優惠", stub.offer));
           card.append(line("時間", formatStamp(stub.approvedAt)));
@@ -511,6 +573,7 @@
     workerUrlFrom: workerUrlFrom,
     buildPatch: buildPatch,
     statusLabel: statusLabel,
+    storeLabel: storeLabel,
     formatStamp: formatStamp,
     mount: mount,
   };

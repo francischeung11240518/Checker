@@ -78,7 +78,7 @@
     font-size: 0.88rem;
     margin-top: 0.15rem;
   }
-  input[type="url"], input[type="password"], input[type="text"], textarea {
+  input[type="url"], input[type="password"], input[type="text"], textarea, select {
     width: 100%;
     font: inherit;
     font-size: 1.05rem;
@@ -157,6 +157,12 @@
   </form>
   </section>
 
+  <label class="field" for="storeFilter">超市
+    <span class="hint">可以只睇某一間。全部就係未篩選。</span>
+    <select id="storeFilter">
+      <option value="">全部超市</option>
+    </select>
+  </label>
   <div class="filters" id="filters">
     <button type="button" data-status="pending" aria-pressed="true">待審核</button>
     <button type="button" data-status="approved" aria-pressed="false">已通過</button>
