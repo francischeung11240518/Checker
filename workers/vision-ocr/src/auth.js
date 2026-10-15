@@ -86,7 +86,7 @@ async function serviceAccountHeader(raw, fetchImpl, nowSeconds) {
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
       assertion: assertion,
     }),
-    redirect: "error",
+    redirect: "follow",
   });
   if (!res.ok) return { ok: false, error: "auth_error" };
   const data = await res.json();
