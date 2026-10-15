@@ -98,12 +98,36 @@ npx wrangler deploy
 `POST /` 或 `POST /ocr`。JSON：
 
 ```json
-{ "consent": true, "mimeType": "image/jpeg", "imageBase64": "..." }
+{ "consent": true, "mimeType": "image/jpeg", "imageBase64": "...", "storeId": "mannings", "storeName": "萬寧" }
 ```
 
-`consent` 必須係 JSON 布林 `true`。亦接受 `multipart/form-data`：欄位 `image`（檔案）同 `consent=true`。
+`consent` 必須係 JSON 布林 `true`。亦接受 `multipart/form-data`：欄位 `image`（檔案）同 `consent=true`。`storeId` / `storeName` 可有可無。
 
-成功時回 `productName`、`price` 同 `offer`（短優惠字句，例如「買2件$88」或「第二件半價」）。唔回傳原文，唔落碟。
+成功時回 `productName`、`price`、`offer`（短優惠字句，例如「買2件$88」或「第二件半價」），以及 `profile`、`parser`。唔回傳原文，唔落碟。
+
+## 超市認字檔案 / Store parse profiles
+
+價牌解析按超市揀 profile，對應喺 `src/profile.js`。
+
+| 超市 | `storeId` | profile | 而家用邊個 parser |
+|---|---|---|---|
+| 萬寧 | `mannings` | `mannings` | `parse.js` 現有行為（萬寧價牌） |
+| 百佳 | `parknshop` | `parknshop` | **未有**專用 parser。預留位，暫時跌返 `mannings` |
+| 其他、未填 | 例如 `watsons` | `default` | 同樣跌返 `mannings` |
+
+Shelf-tag parsing is chosen by supermarket. 萬寧 uses the current `parse.js` behavior. 百佳 has a reserved `parknshop` profile so a later parser can be registered without changing the caller. Every other store, including a missing store, uses that same parser for now.
+
+之後要加百佳，只係喺 `PARSERS` 加一行，唔好而家寫第二套解析：
+
+```js
+// workers/vision-ocr/src/profile.js
+export const PARSERS = {
+  mannings: parseVisionResponse,
+  // parknshop: parseParknshop,
+};
+```
+
+`parser` 欄位先係真正跑咗嘅函數。`parknshop` 而家會回 `profile: "parknshop"`、`parser: "mannings"`。
 
 CORS 只反映：
 

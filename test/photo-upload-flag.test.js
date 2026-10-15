@@ -72,6 +72,31 @@ test("admin helpers build the review patch and format Hong Kong time", () => {
   }), "https://pilot.example.workers.dev/");
 });
 
+test("a supermarket is required and new names dedupe against the seed", () => {
+  assert.equal(Upload.normalizeStoreKey("  萬寧 "), "萬寧");
+  assert.equal(Upload.normalizeStoreKey("Mannings"), "mannings");
+  assert.deepEqual(Upload.resolveStoreChoice(Upload.SEED_STORES, "", "Mannings"), {
+    id: "mannings",
+    name: "萬寧",
+    created: false,
+  });
+  assert.deepEqual(Upload.resolveStoreChoice(Upload.SEED_STORES, "", "759"), {
+    id: "store759",
+    name: "759阿信屋",
+    created: false,
+  });
+  assert.equal(Upload.resolveStoreChoice(Upload.SEED_STORES, "", "  ").error, "store_required");
+  const added = Upload.resolveStoreChoice(Upload.SEED_STORES, "", "優品360");
+  assert.equal(added.created, true);
+  assert.equal(added.name, "優品360");
+  assert.equal(Upload.uploadReady(added), true);
+  assert.equal(Upload.uploadReady(null), false);
+  const names = Upload.SEED_STORES.map(function (row) { return row.name; });
+  for (const name of ["萬寧", "屈臣氏", "百佳", "惠康", "AEON", "一田", "759阿信屋"]) {
+    assert.equal(names.includes(name), true, name);
+  }
+});
+
 test("public search does not link the upload page, and pages do not embed secrets", () => {
   const index = read("index.html");
   const upload = read("upload.html");
@@ -86,6 +111,16 @@ test("public search does not link the upload page, and pages do not embed secret
   assert.match(upload, /type="file"/);
   assert.match(upload, /accept="image\/\*"/);
   assert.equal(uploadJs.includes("INTERNAL_PHOTO_UPLOAD = false"), true);
+  assert.match(upload, /清單冇？新增超市/);
+  assert.match(upload, /請先揀超市/);
+  assert.match(upload, /storeName/);
+  assert.match(upload, /id="photo"[^>]*disabled/);
+  assert.match(upload, /id="send"[^>]*disabled/);
+  assert.match(admin, /id="storeFilter"/);
+  assert.match(adminJs, /storeName/);
+  assert.match(adminJs, /未填超市/);
+  assert.equal(Admin.storeLabel({ storeName: "萬寧", storeId: "mannings" }), "萬寧");
+  assert.equal(Admin.storeLabel({}), "未填超市");
   const blob = [upload, uploadJs, admin, adminJs, read("admin.html")].join("\n");
   assert.equal(blob.includes("GOOGLE_VISION"), false);
   assert.equal(blob.includes("ADMIN_KEY="), false);
