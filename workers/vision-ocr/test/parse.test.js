@@ -161,6 +161,179 @@ test("does not return raw text", () => {
   assert.ok(!parsed.productName.includes("12345678"));
 });
 
+function box(x, y, w, h) {
+  return {
+    vertices: [
+      { x: x, y: y },
+      { x: x + w, y: y },
+      { x: x + w, y: y + h },
+      { x: x, y: y + h },
+    ],
+  };
+}
+
+test("keeps a pack count in the name next to the price", () => {
+  const boxed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: "余仁生烏髮生膠囊\n60\n粒\n$128" },
+      textAnnotations: [
+        { description: "余仁生烏髮生膠囊\n60\n粒\n$128" },
+        { description: "余仁生烏髮生膠囊", boundingPoly: box(10, 700, 240, 36) },
+        { description: "60", boundingPoly: box(254, 700, 36, 36) },
+        { description: "粒", boundingPoly: box(294, 700, 32, 36) },
+        { description: "$128", boundingPoly: box(10, 748, 180, 72) },
+      ],
+    }],
+  });
+  assert.equal(boxed.productName, "余仁生烏髮生膠囊60粒");
+  assert.equal(boxed.price, "128");
+  assert.equal(boxed.offer, "");
+
+  const spaced = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "余仁生烏髮生膠囊 60 粒\n$128" } }],
+  });
+  assert.equal(spaced.productName, "余仁生烏髮生膠囊60粒");
+  assert.equal(spaced.price, "128");
+
+  const sizes = [
+    ["可樂500ml\n$8.5", "可樂500ml", "8.5"],
+    ["果汁 1.25L\n$12", "果汁1.25L", "12"],
+    ["威化餅x8\n$15.5", "威化餅x8", "15.5"],
+    ["8包裝曲奇\n$20", "8包裝曲奇", "20"],
+  ];
+  for (const row of sizes) {
+    const parsed = parseVisionResponse({
+      responses: [{ fullTextAnnotation: { text: row[0] } }],
+    });
+    assert.equal(parsed.productName, row[1], row[0]);
+    assert.equal(parsed.price, row[2], row[0]);
+  }
+});
+
+test("short name next to the price beats packaging on the same photo", () => {
+  const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
+  const text = "好立克\n$45.9\n" + packaging;
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "好", boundingPoly: box(12, 700, 36, 40) },
+        { description: "立", boundingPoly: box(50, 700, 36, 40) },
+        { description: "克", boundingPoly: box(88, 700, 36, 40) },
+        { description: "$45.9", boundingPoly: box(12, 748, 140, 64) },
+        { description: packaging, boundingPoly: box(0, 20, 420, 48) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, "好立克");
+  assert.equal(parsed.offer, "");
+});
+
+test("short name on the line beside the price beats a longer packaging line", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: {
+        text: "全新升級營養配方香濃麥芽飲品全家共享限時優惠\n\n\n好立克\n$45.9",
+      },
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, "好立克");
+});
+
+test("a longer name next to the price beats closer short text and farther packaging", () => {
+  const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
+  const longer = "維他檸檬茶低糖裝";
+  const text = packaging + "\n\n\n" + longer + "\n好立克\n$45.9";
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: packaging, boundingPoly: box(0, 10, 460, 40) },
+        { description: longer, boundingPoly: box(12, 620, 280, 40) },
+        { description: "好立克", boundingPoly: box(12, 700, 110, 40) },
+        { description: "$45.9", boundingPoly: box(12, 748, 140, 64) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, longer);
+  assert.equal(parsed.offer, "");
+});
+
+test("two nearby lines use the one with more Chinese characters", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: {
+        text: "全新升級營養配方香濃麥芽飲品全家共享限時優惠\n\n\n維他檸檬茶低糖裝\n好立克\n$45.9",
+      },
+    }],
+  });
+  assert.equal(parsed.price, "45.9");
+  assert.equal(parsed.productName, "維他檸檬茶低糖裝");
+});
+
+test("whole-image longest name is used only when nothing usable is near the price", () => {
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: "維他檸檬茶低糖裝\n\n\n\n$12.5" },
+    }],
+  });
+  assert.equal(parsed.price, "12.5");
+  assert.equal(parsed.productName, "維他檸檬茶低糖裝");
+});
+
+test("a 價 label anchors the name when the tag has no dollar amount", () => {
+  const packaging = "全新升級營養配方香濃麥芽飲品全家共享限時優惠";
+  const text = "好立克\n特價\n" + packaging;
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "好立克", boundingPoly: box(10, 500, 120, 36) },
+        { description: "特價", boundingPoly: box(10, 546, 80, 32) },
+        { description: packaging, boundingPoly: box(0, 8, 460, 50) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "");
+  assert.equal(parsed.productName, "好立克");
+});
+
+test("price only still returns the price", () => {
+  const rows = [
+    {
+      responses: [{
+        fullTextAnnotation: { text: "$12.5" },
+        textAnnotations: [
+          { description: "$12.5" },
+          { description: "$12.5", boundingPoly: box(8, 40, 120, 48) },
+        ],
+      }],
+    },
+    { responses: [{ fullTextAnnotation: { text: "特價\n$12.5" } }] },
+  ];
+  for (const payload of rows) {
+    const parsed = parseVisionResponse(payload);
+    assert.equal(parsed.price, "12.5");
+    assert.equal(parsed.productName, "");
+    assert.equal(parsed.offer, "");
+  }
+});
+
+test("no price falls back to the longest Chinese line", () => {
+  const parsed = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "維他\n維他檸檬茶低糖裝" } }],
+  });
+  assert.equal(parsed.price, "");
+  assert.equal(parsed.productName, "維他檸檬茶低糖裝");
+  assert.equal(parsed.offer, "");
+});
+
 test("decode checks magic bytes and size input", () => {
   const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   const b64 = Buffer.from(bytes).toString("base64");
