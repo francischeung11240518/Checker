@@ -150,6 +150,7 @@ test("successful call returns name and price and does not log the image", async 
     assert.equal(body.productName, "紫花油");
     assert.equal(body.price, "49.9");
     assert.equal(body.offer, "");
+    assert.equal(body.packSize, "");
     assert.equal(body.imageBase64, undefined);
     assert.equal(calls.length, 1);
     assert.match(calls[0].url, /vision\.googleapis\.com\/v1\/images:annotate$/);
@@ -198,6 +199,7 @@ test("successful call returns the offer phrase and still makes one Vision call",
     assert.equal(body.productName, "潘婷");
     assert.equal(body.price, "49.9");
     assert.equal(body.offer, "買2件$88");
+    assert.equal(body.packSize, "");
     assert.equal(body.text, undefined);
     assert.equal(calls.length, 1);
     const sent = JSON.parse(calls[0].init.body);

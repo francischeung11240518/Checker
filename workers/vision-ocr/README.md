@@ -103,7 +103,7 @@ npx wrangler deploy
 
 `consent` 必須係 JSON 布林 `true`。亦接受 `multipart/form-data`：欄位 `image`（檔案）同 `consent=true`。
 
-成功時回 `productName`、`price` 同 `offer`（短優惠字句，例如「買2件$88」或「第二件半價」）。唔回傳原文，唔落碟。
+成功時回 `productName`、`price`、`offer`（短優惠字句，例如「買2件$88」或「第二件半價」）同 `packSize`（容量／件數，例如 `500ml`、`1.25L`、`60粒`、`8件`、`x8`；冇就係空字串）。唔回傳原文，唔落碟。
 
 CORS 只反映：
 

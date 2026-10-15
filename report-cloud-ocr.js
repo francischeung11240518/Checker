@@ -155,6 +155,17 @@
       .slice(0, 40);
   }
 
+  /** Display string from Vision, e.g. 500ml, 1.25L, 60粒, 8件, x8. */
+  function cleanPackSize(value) {
+    let s = collapseCjkSpaces(String(value || "")).replace(/\s+/g, "");
+    s = s.replace(/^[×X](?=\d)/, "x");
+    s = s.replace(/(\d)ML$/i, "$1ml");
+    s = s.replace(/(\d)KG$/i, "$1kg");
+    s = s.replace(/(\d)G$/i, "$1g");
+    s = s.replace(/(\d)l$/, "$1L");
+    return s.slice(0, 40);
+  }
+
   function storageGet(key) {
     try {
       return root.localStorage.getItem(key);
@@ -316,6 +327,7 @@
     workerUrlFrom: workerUrlFrom,
     cleanName: cleanName,
     cleanOffer: cleanOffer,
+    cleanPackSize: cleanPackSize,
     syncFromLocation: syncFromLocation,
     enabled: enabled,
     disable: disable,

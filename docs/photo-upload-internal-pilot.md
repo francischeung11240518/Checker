@@ -144,9 +144,9 @@ Admin routes require `X-Admin-Key`. Reject responses set `notified: false`. The 
 
 `POST /submissions/:id/ocr` 由 R2 讀相，再以 `{ "consent": true, "mimeType", "imageBase64" }` 經 service binding `VISION_OCR` 叫現有 Worker。`GET /` 會回 `ocrViaBinding`。同一帳戶用 `fetch(https://….workers.dev)` 會被 Cloudflare 拒絕，所以有 binding 時唔會改走公開網址。`DOCUMENT_TEXT_DETECTION`、語言提示、US$15 刹車都留喺 `checker-vision-ocr`，呢度唔複製金鑰。
 
-現有認字 Worker **唔回傳全文**，所以呢度 `rawText` 留空，只預填 `productName`、`price`、`offer`。空欄唔會洗走管理員已經打咗嘅字。
+現有認字 Worker **唔回傳全文**，所以呢度 `rawText` 留空，只預填 `productName`、`price`、`offer`、`packSize`（容量／件數）。空欄唔會洗走管理員已經打咗嘅字。
 
-The existing OCR Worker does not return the full transcript, so `rawText` stays empty. Empty OCR fields do not wipe an admin's typed text.
+The existing OCR Worker does not return the full transcript, so `rawText` stays empty. Prefill copies `productName`, `price`, `offer`, and `packSize`. Empty OCR fields do not wipe an admin's typed text.
 
 如果 binding 同 `VISION_OCR_URL` 都未設定、相大過 `VISION_OCR_MAX_BYTES`，或者對方 kill switch 關閉，預填會失敗並顯示原因，通過／拒絕仍然可以用人手填。
 

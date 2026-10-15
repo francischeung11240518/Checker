@@ -267,6 +267,7 @@ export async function handleRequest(request, env, deps) {
     productName: parsed.productName || "",
     price: parsed.price || "",
     offer: parsed.offer || "",
+    packSize: parsed.packSize || "",
   }, 200, corsOrigin);
 }
 

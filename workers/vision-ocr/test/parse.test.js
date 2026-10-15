@@ -186,6 +186,7 @@ test("keeps a pack count in the name next to the price", () => {
     }],
   });
   assert.equal(boxed.productName, "余仁生烏髮生膠囊60粒");
+  assert.equal(boxed.packSize, "60粒");
   assert.equal(boxed.price, "128");
   assert.equal(boxed.offer, "");
 
@@ -193,13 +194,14 @@ test("keeps a pack count in the name next to the price", () => {
     responses: [{ fullTextAnnotation: { text: "余仁生烏髮生膠囊 60 粒\n$128" } }],
   });
   assert.equal(spaced.productName, "余仁生烏髮生膠囊60粒");
+  assert.equal(spaced.packSize, "60粒");
   assert.equal(spaced.price, "128");
 
   const sizes = [
-    ["可樂500ml\n$8.5", "可樂500ml", "8.5"],
-    ["果汁 1.25L\n$12", "果汁1.25L", "12"],
-    ["威化餅x8\n$15.5", "威化餅x8", "15.5"],
-    ["8包裝曲奇\n$20", "8包裝曲奇", "20"],
+    ["可樂500ml\n$8.5", "可樂500ml", "8.5", "500ml"],
+    ["果汁 1.25L\n$12", "果汁1.25L", "12", "1.25L"],
+    ["威化餅x8\n$15.5", "威化餅x8", "15.5", "x8"],
+    ["8包裝曲奇\n$20", "8包裝曲奇", "20", "8包裝"],
   ];
   for (const row of sizes) {
     const parsed = parseVisionResponse({
@@ -207,6 +209,7 @@ test("keeps a pack count in the name next to the price", () => {
     });
     assert.equal(parsed.productName, row[1], row[0]);
     assert.equal(parsed.price, row[2], row[0]);
+    assert.equal(parsed.packSize, row[3], row[0]);
   }
 });
 
@@ -332,6 +335,77 @@ test("no price falls back to the longest Chinese line", () => {
   assert.equal(parsed.price, "");
   assert.equal(parsed.productName, "維他檸檬茶低糖裝");
   assert.equal(parsed.offer, "");
+});
+
+test("pack size is its own field and keeps the digits in the name", () => {
+  const rows = [
+    ["可樂 500 ml\n$8.5", "可樂500ml", "8.5", "500ml"],
+    ["果汁 1.25 L\n$12", "果汁1.25L", "12", "1.25L"],
+    ["維他命 60 粒\n$128", "維他命60粒", "128", "60粒"],
+    ["曲奇8件\n$20", "曲奇8件", "20", "8件"],
+    ["威化餅 x 8\n$15.5", "威化餅x8", "15.5", "x8"],
+    ["餅乾×8\n$15", "餅乾×8", "15", "x8"],
+    ["牛奶 1,25L\n$18", "牛奶1,25L", "18", "1.25L"],
+    ["果汁1.25公升\n$12", "果汁1.25公升", "12", "1.25公升"],
+    ["泰國香米2公斤\n$40", "泰國香米2公斤", "40", "2公斤"],
+    ["砂糖100公克\n$5", "砂糖100公克", "5", "100公克"],
+  ];
+  for (const row of rows) {
+    const parsed = parseVisionResponse({
+      responses: [{ fullTextAnnotation: { text: row[0] } }],
+    });
+    assert.equal(parsed.productName, row[1], row[0]);
+    assert.equal(parsed.price, row[2], row[0]);
+    assert.equal(parsed.packSize, row[3], row[0]);
+  }
+});
+
+test("a shelf price, a barcode, and an offer quantity are not pack size", () => {
+  const rows = [
+    ["$12.5", "", "12.5", ""],
+    ["特價\n$12.5", "", "12.5", ""],
+    ["可樂\n4891234567890\n$8.5", "可樂", "8.5", ""],
+    ["潘婷乳液\n$49.9\n買2件$88", "潘婷乳液", "49.9", ""],
+    ["紫花油\n$49.9\n第二件半價", "紫花油", "49.9", ""],
+  ];
+  for (const row of rows) {
+    const parsed = parseVisionResponse({
+      responses: [{ fullTextAnnotation: { text: row[0] } }],
+    });
+    assert.equal(parsed.productName, row[1], row[0]);
+    assert.equal(parsed.price, row[2], row[0]);
+    assert.equal(parsed.packSize, row[3], row[0]);
+    if (row[0].indexOf("買2件") >= 0) assert.equal(parsed.offer, "買2件$88");
+    if (row[0].indexOf("半價") >= 0) assert.equal(parsed.offer, "第二件半價");
+  }
+});
+
+test("a pack size far from the price loses to a nearer one", () => {
+  const text = "2L\n$12\n備註\n果汁 500ml";
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "2L", boundingPoly: box(0, 10, 70, 36) },
+        { description: "$12", boundingPoly: box(12, 700, 140, 64) },
+        { description: "果汁", boundingPoly: box(12, 640, 80, 36) },
+        { description: "500ml", boundingPoly: box(100, 640, 110, 36) },
+      ],
+    }],
+  });
+  assert.equal(parsed.price, "12");
+  assert.equal(parsed.productName, "果汁500ml");
+  assert.equal(parsed.packSize, "500ml");
+});
+
+test("split count tokens next to the price become one pack size", () => {
+  const parsed = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "維他命\n60\n粒\n$88" } }],
+  });
+  assert.equal(parsed.productName, "維他命");
+  assert.equal(parsed.packSize, "60粒");
+  assert.equal(parsed.price, "88");
 });
 
 test("decode checks magic bytes and size input", () => {
