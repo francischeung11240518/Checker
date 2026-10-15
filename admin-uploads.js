@@ -45,6 +45,7 @@
       productName: src.productName || "",
       price: src.price || "",
       offer: src.offer || "",
+      packSize: src.packSize || "",
       adminNote: src.adminNote || "",
     };
   }
@@ -258,7 +259,7 @@
       }
     }
 
-    function field(label, id, value) {
+    function field(label, id, value, placeholder, maxLength) {
       const wrap = doc.createElement("label");
       wrap.className = "field";
       wrap.append(doc.createTextNode(label));
@@ -266,6 +267,8 @@
       input.id = id;
       input.type = "text";
       input.value = value || "";
+      if (placeholder) input.placeholder = placeholder;
+      if (maxLength) input.maxLength = maxLength;
       wrap.append(input);
       return wrap;
     }
@@ -314,6 +317,7 @@
       } catch (e) { /* photo error stays a blank frame */ }
 
       const name = field("產品名", "productName", item.productName);
+      const pack = field("容量／件數", "packSize", item.packSize, "例如 500ml、1.25L、60粒、8件", 40);
       const price = field("價錢", "price", item.price);
       const offer = field("優惠", "offer", item.offer);
       const noteWrap = doc.createElement("label");
@@ -327,7 +331,7 @@
       note.value = item.adminNote || "";
       noteWrap.append(hint, note);
 
-      detail.append(name, price, offer, noteWrap);
+      detail.append(name, pack, price, offer, noteWrap);
 
       if (item.ocrError) {
         const err = doc.createElement("p");
@@ -362,6 +366,7 @@
           productName: doc.getElementById("productName").value,
           price: doc.getElementById("price").value,
           offer: doc.getElementById("offer").value,
+          packSize: doc.getElementById("packSize").value,
           adminNote: doc.getElementById("adminNote").value,
         };
       }
@@ -380,12 +385,13 @@
             doc.getElementById("productName").value = itemNow.productName || "";
             doc.getElementById("price").value = itemNow.price || "";
             doc.getElementById("offer").value = itemNow.offer || "";
+            doc.getElementById("packSize").value = itemNow.packSize || "";
           }
           if (!out.res.ok || !out.data || out.data.ok !== true) {
             setError((out.data && out.data.message) || "雲端認字暫時未能使用。");
             return;
           }
-          showToast("已預填。請核對產品名、價錢同優惠，再決定通過或拒絕。");
+          showToast("已預填。請核對產品名、容量／件數、價錢同優惠，再決定通過或拒絕。");
         } catch (e) {
           setError("連唔上上載服務。");
         } finally {
@@ -552,6 +558,7 @@
           card.append(h);
           card.append(line("超市", storeLabel(stub)));
           card.append(line("價錢", stub.price));
+          card.append(line("容量／件數", stub.packSize));
           card.append(line("優惠", stub.offer));
           card.append(line("時間", formatStamp(stub.approvedAt)));
           const next = doc.createElement("p");

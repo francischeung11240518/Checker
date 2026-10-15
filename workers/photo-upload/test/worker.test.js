@@ -572,3 +572,42 @@ test("config keeps the upload switch off and does not embed secrets", () => {
   assert.match(example, /local-dev-only-not-a-real-secret/);
   assert.doesNotMatch(example, /AIza|PRIVATE KEY/);
 });
+
+test("ocr prefill stores pack size and save keeps an edit", async () => {
+  const env = baseEnv({ VISION_OCR_URL: "https://checker-vision-ocr.example.workers.dev/" });
+  const created = await (await uploadJpeg(env, {})).json();
+  const res = await handleRequest(new Request("https://worker.test/submissions/" + created.id + "/ocr", {
+    method: "POST",
+    headers: adminHeaders(),
+  }), env, {
+    now: NOW,
+    fetch: async function () {
+      return new Response(JSON.stringify({
+        ok: true,
+        productName: "維他命",
+        price: "128",
+        offer: "",
+        packSize: "60粒",
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    },
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.equal(body.item.packSize, "60粒");
+  assert.deepEqual(body.filled, ["productName", "price", "packSize"]);
+
+  const saved = await handleRequest(new Request("https://worker.test/submissions/" + created.id, {
+    method: "PATCH",
+    headers: adminHeaders(),
+    body: JSON.stringify({
+      action: "save",
+      productName: "維他命",
+      price: "128",
+      offer: "",
+      packSize: "500ml",
+    }),
+  }), env, { now: NOW });
+  const after = await saved.json();
+  assert.equal(after.item.packSize, "500ml");
+  assert.equal(after.item.status, "pending");
+});

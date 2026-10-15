@@ -89,6 +89,11 @@ test("name cleanup collapses Chinese spaces and drops a bare offer", () => {
   assert.equal(Cloud.cleanName("50% off"), "");
   assert.equal(Cloud.cleanOffer("  買 2 件 半 價  "), "買 2件半價");
   assert.equal(Cloud.cleanOffer("第 二 件 半 價"), "第二件半價");
+  assert.equal(Cloud.cleanPackSize(" 500 ml "), "500ml");
+  assert.equal(Cloud.cleanPackSize("1.25 L"), "1.25L");
+  assert.equal(Cloud.cleanPackSize("60 粒"), "60粒");
+  assert.equal(Cloud.cleanPackSize("× 8"), "x8");
+  assert.equal(Cloud.cleanPackSize("2KG"), "2kg");
 });
 
 test("postCrop sends consent and refuses other hosts", async () => {

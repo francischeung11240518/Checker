@@ -1,4 +1,4 @@
-/** Best-effort price-tag parse. Returns name, price, and a short offer — never the image. */
+/** Best-effort price-tag parse. Returns name, price, offer, and pack size — never the image. */
 
 /** Same offer coverage as report-shared.js parseOcr, including 半價 and % off. */
 const OFFER_RE = /買\s*第?\s*\d+\s*件\s*半\s*價|第\s*[二2]\s*件\s*半\s*價|買\s*\d+\s*件[^\n]{0,18}|買\s*\d+\s*送\s*\d+|第\s*[二2]\s*件[^\n]{0,12}|\d{1,2}\s*%\s*off|\d+\s*for\s*\$?\s*\d+(?:[.,]\d{1,2})?|減\s*\$?\s*\d+(?:[.,]\d{1,2})?/i;
@@ -145,7 +145,7 @@ function pickPrice(cands) {
   return pool[0];
 }
 
-const SIZE_UNIT = "ml|mL|ML|kg|KG|g|L|l|克|毫升|升|粒|片|包|支|罐|盒|件|裝";
+const SIZE_UNIT = "ml|mL|ML|kg|KG|g|L|l|毫升|公升|公斤|公克|克|升|粒|片|包|支|罐|盒|件|裝";
 
 /** CJK name plus a short pack/size (60粒, 500ml, 1.25L, x8, 8包裝). Not a barcode or $price. */
 function productSpan(core) {
@@ -560,10 +560,241 @@ function wordsFromAnnotation(annotation) {
   return words;
 }
 
+const PACK_UNIT_SRC = "包裝|毫升|公升|公斤|公克|ml|mL|ML|Ml|kg|KG|Kg|kG|g|G|克|升|粒|片|包|支|罐|盒|件|裝|L|l";
+
+function canonPackUnit(unit) {
+  const raw = String(unit || "");
+  const fixed = {
+    "毫升": "毫升",
+    "公升": "公升",
+    "公斤": "公斤",
+    "公克": "公克",
+    "包裝": "包裝",
+    "克": "克",
+    "升": "升",
+    "粒": "粒",
+    "片": "片",
+    "包": "包",
+    "支": "支",
+    "罐": "罐",
+    "盒": "盒",
+    "件": "件",
+    "裝": "裝",
+  };
+  if (fixed[raw]) return fixed[raw];
+  const lower = raw.toLowerCase();
+  if (lower === "ml") return "ml";
+  if (lower === "kg") return "kg";
+  if (lower === "g") return "g";
+  if (lower === "l") return "L";
+  return "";
+}
+
+function formatPackNumber(raw) {
+  const n = parseFloat(String(raw || "").replace(",", "."));
+  if (!Number.isFinite(n) || n <= 0 || n >= 10000) return "";
+  const rounded = Math.round(n * 1000) / 1000;
+  if (!(rounded > 0)) return "";
+  return rounded.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function currencyBefore(text, index) {
+  const prev = text.slice(Math.max(0, index - 6), index);
+  return /(?:HKD|HK\$|＄|\$)\s*$/i.test(prev);
+}
+
+function offerOverlap(text) {
+  const match = new RegExp(OFFER_RE.source, "i").exec(String(text || ""));
+  if (!match) return null;
+  return { start: match.index, end: match.index + match[0].length };
+}
+
+function overlapsSpan(span, start, end) {
+  if (!span) return false;
+  return start < span.end && end > span.start;
+}
+
+/** 500ml, 1.25L, 60粒, 8件, 8包裝, x8. A shelf $ price or a long barcode is not a pack size. */
+function packSizesInText(text) {
+  const raw = String(text || "");
+  const span = offerOverlap(raw);
+  const found = [];
+  const unitRe = new RegExp(
+    "(^|[^0-9])(\\d{1,4}(?:[.,]\\d{1,3})?)\\s*(" + PACK_UNIT_SRC + ")(?![A-Za-z])",
+    "g"
+  );
+  let match;
+  while ((match = unitRe.exec(raw))) {
+    const numStart = match.index + match[1].length;
+    const end = match.index + match[0].length;
+    if (overlapsSpan(span, numStart, end) || currencyBefore(raw, numStart)) continue;
+    const unit = canonPackUnit(match[3]);
+    const num = formatPackNumber(match[2]);
+    if (!num || !unit) continue;
+    found.push({ display: num + unit, index: numStart });
+  }
+  const countRe = /(^|[^A-Za-z0-9])([xX×])\s*(\d{1,4})(?!\d)/g;
+  while ((match = countRe.exec(raw))) {
+    const numStart = match.index + match[1].length;
+    const end = match.index + match[0].length;
+    if (overlapsSpan(span, numStart, end)) continue;
+    const num = formatPackNumber(match[3]);
+    if (!num) continue;
+    found.push({ display: "x" + num, index: numStart });
+  }
+  found.sort(function (a, b) { return a.index - b.index; });
+  return found;
+}
+
+function nameHasPack(productName, display) {
+  const name = String(productName || "").replace(/\s+/g, "").toLowerCase();
+  const token = String(display || "").replace(/\s+/g, "").toLowerCase();
+  if (!name || !token) return false;
+  return name.indexOf(token) !== -1;
+}
+
+function betterPack(candidate, best) {
+  if (!best) return true;
+  if (candidate.dist !== best.dist) return candidate.dist < best.dist;
+  if (candidate.inName !== best.inName) return candidate.inName;
+  return candidate.index < best.index;
+}
+
+function considerPackSizes(sizes, dist, productName, best) {
+  let next = best;
+  for (let i = 0; i < sizes.length; i++) {
+    const cand = {
+      display: sizes[i].display,
+      dist: dist,
+      index: sizes[i].index,
+      inName: nameHasPack(productName, sizes[i].display),
+    };
+    if (betterPack(cand, next)) next = cand;
+  }
+  return next;
+}
+
+function embeddedPackSize(productName) {
+  const sizes = packSizesInText(productName);
+  return sizes.length ? sizes[0].display : "";
+}
+
+function barePackNumber(line) {
+  return /^\d{1,4}(?:[.,]\d{1,3})?$/.test(String(line || "").trim());
+}
+
+function barePackUnit(line) {
+  return new RegExp("^(?:" + PACK_UNIT_SRC + ")$").test(String(line || "").trim());
+}
+
+function bareCountMark(line) {
+  return /^[xX×]$/.test(String(line || "").trim());
+}
+
+function packSizeNearLines(text, priceCand, productName) {
+  const raw = collapseCjkSpaces(String(text || ""));
+  const lines = raw.split(/\n/);
+  const anchors = textAnchorIndexes(lines, priceCand);
+  if (!anchors.length) return "";
+  const near = [];
+  for (let i = 0; i < lines.length; i++) {
+    let dist = Infinity;
+    for (let a = 0; a < anchors.length; a++) {
+      const d = Math.abs(i - anchors[a]);
+      if (d < dist) dist = d;
+    }
+    if (dist <= NEAR_LINE_DIST) near.push({ i: i, dist: dist });
+  }
+  let best = null;
+  for (let n = 0; n < near.length; n++) {
+    const row = near[n];
+    let chunk = lines[row.i];
+    let dist = row.dist;
+    const next = n + 1 < near.length ? near[n + 1] : null;
+    if (next && next.i === row.i + 1) {
+      const left = String(lines[row.i] || "").trim();
+      const right = String(lines[next.i] || "").trim();
+      if ((barePackNumber(left) && barePackUnit(right)) || (bareCountMark(left) && barePackNumber(right))) {
+        chunk = left + right;
+        dist = Math.min(dist, next.dist);
+      }
+    }
+    best = considerPackSizes(packSizesInText(chunk), dist, productName, best);
+  }
+  return best ? best.display : "";
+}
+
+function packSizeNearBoxes(words, priceCand, anchors, productName) {
+  if (!words || !words.length || !anchors.length) return "";
+  const items = [];
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const desc = String(word && word.description || "").trim();
+    if (!desc || isShelfPriceWord(desc, priceCand) || isPriceLabel(desc)) continue;
+    const rect = rectFromPoly(word && word.boundingPoly);
+    if (!rect) continue;
+    let dist = Infinity;
+    for (let a = 0; a < anchors.length; a++) {
+      if (!isNearRect(anchors[a], rect)) continue;
+      const d = rectDistance(anchors[a], rect);
+      if (d < dist) dist = d;
+    }
+    if (dist === Infinity) continue;
+    items.push({ desc: desc, rect: rect, dist: dist });
+  }
+  if (!items.length) return "";
+  items.sort(function (a, b) {
+    if (a.rect.y0 !== b.rect.y0) return a.rect.y0 - b.rect.y0;
+    return a.rect.x0 - b.rect.x0;
+  });
+  const lines = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    let line = null;
+    for (let j = 0; j < lines.length; j++) {
+      if (sameLine(lines[j].seed, item.rect)) {
+        line = lines[j];
+        break;
+      }
+    }
+    if (!line) lines.push({ seed: item.rect, items: [item], dist: item.dist });
+    else {
+      line.items.push(item);
+      if (item.dist < line.dist) line.dist = item.dist;
+    }
+  }
+  let best = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    line.items.sort(function (a, b) { return a.rect.x0 - b.rect.x0; });
+    const parts = [];
+    for (let j = 0; j < line.items.length; j++) parts.push(line.items[j].desc);
+    best = considerPackSizes(packSizesInText(joinWordText(parts)), line.dist, productName, best);
+  }
+  return best ? best.display : "";
+}
+
+/**
+ * Capacity or pack count in the same neighbourhood as the price and the chosen name.
+ * A size already glued into productName is still copied here.
+ * With word boxes, a size outside that neighbourhood loses to a nearer one.
+ */
+function choosePackSize(text, words, priceCand, productName) {
+  const anchors = boxAnchors(words || [], priceCand);
+  if (anchors.length) {
+    const near = packSizeNearBoxes(words, priceCand, anchors, productName);
+    if (near) return near;
+    return embeddedPackSize(productName);
+  }
+  const nearLine = packSizeNearLines(text, priceCand, productName);
+  if (nearLine) return nearLine;
+  return embeddedPackSize(productName);
+}
+
 export function parseVisionResponse(payload) {
   const response = payload && Array.isArray(payload.responses) ? payload.responses[0] : null;
   if (!response || response.error) {
-    return { ok: false, productName: "", price: "", offer: "" };
+    return { ok: false, productName: "", price: "", offer: "", packSize: "" };
   }
   const annotation = response.fullTextAnnotation;
   const text = textFromAnnotation(annotation)
@@ -591,11 +822,13 @@ export function parseVisionResponse(payload) {
   if (!cands.length) cands = pricesInText(text);
   const picked = pickPrice(cands);
   const price = picked ? picked.n : null;
+  const productName = chooseProductName(text, words, picked);
   return {
     ok: true,
-    productName: chooseProductName(text, words, picked),
+    productName: productName,
     price: formatPrice(price),
     offer: offer,
+    packSize: choosePackSize(text, words, picked, productName),
   };
 }
 

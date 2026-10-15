@@ -654,6 +654,7 @@
     const name = api ? api.cleanName(data && data.productName) : "";
     const price = S.parsePrice(data && data.price);
     const offer = api ? api.cleanOffer(data && data.offer) : "";
+    const packSize = api ? api.cleanPackSize(data && data.packSize) : "";
     if (!state.ocr) {
       rememberOcr("", null);
       state.ocr.failed = true;
@@ -669,6 +670,10 @@
     if (offer) {
       state.offerText = offer;
       state.ocr.offer = offer;
+    }
+    if (packSize) {
+      state.spec = packSize;
+      state.ocr.packSize = packSize;
     }
     state.cloudNote = "以下有雲端預填草稿（功能未定稿），可以錯。請改到啱，下一步要剔「我已核對」先可以提交。";
   }
@@ -708,7 +713,7 @@
     $("cloudStatus").hidden = true;
     $("cloudDecline").disabled = false;
     cloudBusy = false;
-    if (result && result.ok && result.data && (result.data.price || result.data.productName || result.data.offer)) {
+    if (result && result.ok && result.data && (result.data.price || result.data.productName || result.data.offer || result.data.packSize)) {
       applyCloudPrefill(result.data);
     } else {
       cloudFallback("雲端預填未能使用，已改由你自己填。可以照常提交。");
@@ -930,6 +935,12 @@
     else $("draftNote").textContent = failed
       ? "讀唔到相入面嘅字，請自己填。填好先提交。"
       : "以下係系統讀相結果，請改到啱先提交。";
+    const specHint = $("specHint");
+    if (specHint) {
+      specHint.textContent = state.cloudUsed && state.ocr && state.ocr.packSize
+        ? "雲端預填咗容量／件數，請核對。預填可以錯。"
+        : "例如 500ml、1.25L、60粒、8件。可留空。";
+    }
     const hint = $("priceHint");
     if (state.cloudUsed && state.ocr && state.ocr.price != null) {
       hint.textContent = "雲端預填咗價錢，請核對。預填可以錯。";
@@ -1059,6 +1070,7 @@
         failed: !!(state.ocr && state.ocr.failed),
         price: state.ocr ? state.ocr.price : null,
         offer: state.ocr ? state.ocr.offer : "",
+        packSize: state.ocr ? state.ocr.packSize || "" : "",
         productGuess: state.ocr ? state.ocr.productGuess : "",
         excerpt: state.ocrExcerpt || "",
         cloud: state.cloudUsed ? "prefill" : (state.cloudTried ? "fallback" : ""),

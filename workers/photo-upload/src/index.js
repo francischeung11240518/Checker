@@ -150,6 +150,7 @@ function toAdminItem(rec, detail) {
     productName: rec.productName || "",
     price: rec.price || "",
     offer: rec.offer || "",
+    packSize: rec.packSize || "",
     adminNote: rec.adminNote || "",
   };
   if (detail) {
@@ -354,6 +355,7 @@ async function upload(request, env, now, origin) {
     productName: "",
     price: "",
     offer: "",
+    packSize: "",
     rawText: "",
     ocrAt: "",
     ocrError: "",
@@ -502,6 +504,7 @@ function applyFields(rec, body) {
   rec.productName = clipText(body.productName, 80);
   rec.price = clipText(body.price, 32);
   rec.offer = clipText(body.offer, 80);
+  rec.packSize = clipText(body.packSize, 40);
   rec.adminNote = clipText(body.adminNote, 500);
 }
 
@@ -536,6 +539,7 @@ async function patchSubmission(request, env, id, now, origin) {
       approvedAt: rec.reviewedAt,
       productName: rec.productName,
       price: rec.price,
+      packSize: rec.packSize || "",
       offer: rec.offer,
       nickname: rec.nickname,
       email: rec.email,
@@ -651,6 +655,10 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
   if (data.offer) {
     rec.offer = clipText(data.offer, 80);
     filled.push("offer");
+  }
+  if (data.packSize) {
+    rec.packSize = clipText(data.packSize, 40);
+    filled.push("packSize");
   }
   rec.rawText = "";
   rec.ocrError = "";

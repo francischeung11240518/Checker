@@ -54,6 +54,7 @@ export function parseWithProfile(profile, payload, parsers) {
     productName: parsed.productName || "",
     price: parsed.price || "",
     offer: parsed.offer || "",
+    packSize: parsed.packSize || "",
     profile: requested,
     parser: registered ? requested : "mannings",
   };

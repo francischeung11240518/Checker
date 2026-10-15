@@ -40,12 +40,15 @@ test("mannings uses the current parser and parknshop is only a hook", () => {
   assert.equal(mannings.profile, "mannings");
   assert.equal(mannings.productName, direct.productName);
   assert.equal(mannings.price, direct.price);
+  assert.equal(mannings.packSize, direct.packSize);
   assert.equal(fallback.profile, "parknshop");
   assert.equal(fallback.parser, "mannings");
   assert.equal(fallback.productName, direct.productName);
   assert.equal(fallback.price, direct.price);
+  assert.equal(fallback.packSize, direct.packSize);
   assert.equal(unknown.parser, "mannings");
   assert.equal(unknown.productName, direct.productName);
+  assert.equal(unknown.packSize, direct.packSize);
 
   const plugged = parseWithProfile("parknshop", SAMPLE, {
     mannings: parseVisionResponse,
@@ -104,4 +107,86 @@ test("vision worker selects the profile from the submitted supermarket", async (
   assert.equal(other.profile, "default");
   assert.equal(other.parser, "mannings");
   assert.equal(other.productName, mannings.productName);
+  assert.equal(mannings.packSize, "");
+  assert.equal(parknshop.packSize, "");
+  assert.equal(other.packSize, "");
+});
+
+const SIZED = {
+  responses: [{
+    fullTextAnnotation: { text: "可樂500ml\n$8.5\n" },
+  }],
+};
+
+test("profile wrapper keeps packSize for mannings, parknshop, and default", () => {
+  const direct = parseVisionResponse(SIZED);
+  assert.equal(direct.packSize, "500ml");
+  assert.equal(direct.productName, "可樂500ml");
+  const mannings = parseWithProfile("mannings", SIZED);
+  const parknshop = parseWithProfile("parknshop", SIZED);
+  const unknown = parseWithProfile("watsons", SIZED);
+  assert.equal(mannings.packSize, "500ml");
+  assert.equal(mannings.profile, "mannings");
+  assert.equal(mannings.parser, "mannings");
+  assert.equal(parknshop.packSize, "500ml");
+  assert.equal(parknshop.profile, "parknshop");
+  assert.equal(parknshop.parser, "mannings");
+  assert.equal(unknown.packSize, "500ml");
+  assert.equal(unknown.profile, "watsons");
+  assert.equal(unknown.parser, "mannings");
+
+  const plugged = parseWithProfile("parknshop", SIZED, {
+    mannings: parseVisionResponse,
+    parknshop: function () {
+      return { ok: true, productName: "百佳專用", price: "1", offer: "", packSize: "1L" };
+    },
+  });
+  assert.equal(plugged.packSize, "1L");
+  assert.equal(plugged.profile, "parknshop");
+  assert.equal(plugged.parser, "parknshop");
+});
+
+test("vision response keeps packSize when a store profile wraps the parser", async () => {
+  const env = {
+    VISION_OCR_ENABLED: "true",
+    DAILY_REQUEST_CAP: "50",
+    MONTHLY_BUDGET_USD: "15",
+    MONTHLY_STOP_FRACTION: "0.8",
+    FREE_UNITS_PER_MONTH: "1000",
+    PRICE_PER_THOUSAND_USD: "1.50",
+    MAX_IMAGE_BYTES: "900000",
+    GOOGLE_VISION_API_KEY: "test-key-not-real",
+    QUOTA: memoryKv(),
+  };
+  const imageBase64 = Buffer.from(JPEG).toString("base64");
+  async function call(extra) {
+    return handleRequest(new Request("https://worker.test/ocr", {
+      method: "POST",
+      headers: {
+        origin: "https://francischeung11240518.github.io",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(Object.assign({
+        consent: true,
+        imageBase64: imageBase64,
+        mimeType: "image/jpeg",
+      }, extra)),
+    }), env, {
+      now: new Date("2026-10-15T03:00:00.000Z"),
+      fetch: async function () {
+        return new Response(JSON.stringify(SIZED), { status: 200, headers: { "content-type": "application/json" } });
+      },
+    });
+  }
+  const mannings = await (await call({ storeId: "mannings", storeName: "萬寧" })).json();
+  const parknshop = await (await call({ storeId: "parknshop", storeName: "百佳" })).json();
+  assert.equal(mannings.ok, true);
+  assert.equal(mannings.packSize, "500ml");
+  assert.equal(mannings.productName, "可樂500ml");
+  assert.equal(mannings.price, "8.5");
+  assert.equal(mannings.profile, "mannings");
+  assert.equal(mannings.parser, "mannings");
+  assert.equal(parknshop.packSize, "500ml");
+  assert.equal(parknshop.profile, "parknshop");
+  assert.equal(parknshop.parser, "mannings");
 });

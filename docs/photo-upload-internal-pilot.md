@@ -6,9 +6,9 @@ Photo-tag upload review, internal skeleton. This is a pilot Francis can try. It 
 
 ## 做了什麼 / What landed
 
-用家開一個內部頁，**先揀超市**（可以搜尋；清單未有就撳「清單冇？新增超市」輸入店名），再影價牌或者由相簿揀一張相，可以留低暱稱同電郵（兩項都可留空）。未揀超市唔可以影相或上傳。相同資料交去 Cloudflare Worker，寫入 R2 同 KV，並記下超市。新店名喺上傳成功之後先寫入共用清單，下一個人開頁會見到。管理員喺另一頁睇清單（縮圖、時間、超市、暱稱、電郵），可以按超市篩選。打開一筆可以改產品名、價錢、優惠，撳「跑 OCR 預填」先會叫現有嘅 `checker-vision-ocr` 讀相，並帶上嗰間超市。萬寧用而家嘅認字；其他店暫時用同一套，百佳預留咗之後先至自己嘅 parser。通過會標記做已通過，並寫入一條上架佇列；拒絕只改狀態同備註。
+用家開一個內部頁，**先揀超市**（可以搜尋；清單未有就撳「清單冇？新增超市」輸入店名），再影價牌或者由相簿揀一張相，可以留低暱稱同電郵（兩項都可留空）。未揀超市唔可以影相或上傳。相同資料交去 Cloudflare Worker，寫入 R2 同 KV，並記下超市。新店名喺上傳成功之後先寫入共用清單，下一個人開頁會見到。管理員喺另一頁睇清單（縮圖、時間、超市、暱稱、電郵），可以按超市篩選。打開一筆可以改產品名、容量／件數、價錢、優惠，撳「跑 OCR 預填」先會叫現有嘅 `checker-vision-ocr` 讀相，並帶上嗰間超市。萬寧用而家嘅認字；其他店暫時用同一套，百佳預留咗之後先至自己嘅 parser。通過會標記做已通過，並寫入一條上架佇列；拒絕只改狀態同備註。
 
-A person opens an internal page, picks a supermarket first (search the list, or add a name that is not listed), then takes or picks one price-tag photo. Nickname and email may stay blank. The photo controls stay off until a store is chosen. The Worker stores the image in R2 and the row, including the supermarket, in KV. A new store name is added to the shared list only after a successful upload, so the next visitor sees it. The admin list shows a thumbnail, time, supermarket, and the optional contact fields, and can filter by store. The detail screen edits product, price, and offer. **跑 OCR 預填** asks the existing `checker-vision-ocr` Worker to read the stored photo and passes that supermarket. 萬寧 uses the current parser. Other stores use the same parser for now. 百佳 has a reserved profile and no separate parser yet. Approve marks the row and appends a publish stub. Reject stores a note only.
+A person opens an internal page, picks a supermarket first (search the list, or add a name that is not listed), then takes or picks one price-tag photo. Nickname and email may stay blank. The photo controls stay off until a store is chosen. The Worker stores the image in R2 and the row, including the supermarket, in KV. A new store name is added to the shared list only after a successful upload, so the next visitor sees it. The admin list shows a thumbnail, time, supermarket, and the optional contact fields, and can filter by store. The detail screen edits product, pack size, price, and offer. **跑 OCR 預填** asks the existing `checker-vision-ocr` Worker to read the stored photo and passes that supermarket. 萬寧 uses the current parser. Other stores use the same parser for now. 百佳 has a reserved profile and no separate parser yet. Approve marks the row and appends a publish stub. Reject stores a note only.
 
 用家部手機**唔會**跑 Tesseract，亦唔會直接叫 Google Vision。搜尋頁同每日價格更新冇改。
 
@@ -144,9 +144,9 @@ Admin routes require `X-Admin-Key`. Reject responses set `notified: false`. The 
 
 `POST /submissions/:id/ocr` 由 R2 讀相，再以 `{ "consent": true, "mimeType", "imageBase64" }` 經 service binding `VISION_OCR` 叫現有 Worker。`GET /` 會回 `ocrViaBinding`。同一帳戶用 `fetch(https://….workers.dev)` 會被 Cloudflare 拒絕，所以有 binding 時唔會改走公開網址。`DOCUMENT_TEXT_DETECTION`、語言提示、US$15 刹車都留喺 `checker-vision-ocr`，呢度唔複製金鑰。
 
-現有認字 Worker **唔回傳全文**，所以呢度 `rawText` 留空，只預填 `productName`、`price`、`offer`。空欄唔會洗走管理員已經打咗嘅字。
+現有認字 Worker **唔回傳全文**，所以呢度 `rawText` 留空，只預填 `productName`、`price`、`offer`、`packSize`（容量／件數）。空欄唔會洗走管理員已經打咗嘅字。
 
-The existing OCR Worker does not return the full transcript, so `rawText` stays empty. Empty OCR fields do not wipe an admin's typed text.
+The existing OCR Worker does not return the full transcript, so `rawText` stays empty. Prefill copies `productName`, `price`, `offer`, and `packSize`. Empty OCR fields do not wipe an admin's typed text.
 
 如果 binding 同 `VISION_OCR_URL` 都未設定、相大過 `VISION_OCR_MAX_BYTES`，或者對方 kill switch 關閉，預填會失敗並顯示原因，通過／拒絕仍然可以用人手填。
 

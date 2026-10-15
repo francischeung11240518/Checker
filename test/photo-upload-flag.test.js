@@ -52,12 +52,14 @@ test("admin helpers build the review patch and format Hong Kong time", () => {
     productName: "維他奶",
     price: "8.5",
     offer: "",
+    packSize: "250ml",
     adminNote: "唔係價牌",
   }), {
     action: "reject",
     productName: "維他奶",
     price: "8.5",
     offer: "",
+    packSize: "250ml",
     adminNote: "唔係價牌",
   });
   assert.equal(Admin.statusLabel("pending"), "待審核");

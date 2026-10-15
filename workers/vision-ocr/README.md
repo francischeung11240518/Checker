@@ -103,7 +103,7 @@ npx wrangler deploy
 
 `consent` 必須係 JSON 布林 `true`。亦接受 `multipart/form-data`：欄位 `image`（檔案）同 `consent=true`。`storeId` / `storeName` 可有可無。
 
-成功時回 `productName`、`price`、`offer`（短優惠字句，例如「買2件$88」或「第二件半價」），以及 `profile`、`parser`。唔回傳原文，唔落碟。
+成功時回 `productName`、`price`、`offer`（短優惠字句，例如「買2件$88」或「第二件半價」）、`packSize`（容量／件數，例如 `500ml`、`1.25L`、`60粒`、`8件`、`x8`；冇就係空字串），以及 `profile`、`parser`。唔回傳原文，唔落碟。
 
 ## 超市認字檔案 / Store parse profiles
 
