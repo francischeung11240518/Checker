@@ -408,6 +408,45 @@ test("split count tokens next to the price become one pack size", () => {
   assert.equal(parsed.price, "88");
 });
 
+test("keeps embedded Latin letters in a shelf-tag product name", () => {
+  const full = "羅拔臣芒果o者厘粉";
+  const textOnly = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: full + "\n$9.9\n90g" } }],
+  });
+  assert.equal(textOnly.productName, full);
+  assert.equal(textOnly.price, "9.9");
+  assert.equal(textOnly.packSize, "90g");
+
+  const spaced = parseVisionResponse({
+    responses: [{ fullTextAnnotation: { text: "羅拔臣芒果 o 者厘粉\n$9.9\n90g" } }],
+  });
+  assert.equal(spaced.productName, full);
+  assert.equal(spaced.price, "9.9");
+  assert.equal(spaced.packSize, "90g");
+
+  const text = full + "\n$9.9\n90g";
+  const boxed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "羅拔臣", boundingPoly: box(10, 700, 90, 36) },
+        { description: "芒果", boundingPoly: box(100, 700, 60, 36) },
+        { description: "o", boundingPoly: box(160, 708, 14, 24) },
+        { description: "者厘粉", boundingPoly: box(174, 700, 90, 36) },
+        { description: "$9.9", boundingPoly: box(280, 700, 80, 48) },
+        { description: "90g", boundingPoly: box(10, 760, 50, 28) },
+      ],
+    }],
+  });
+  assert.equal(boxed.productName, full);
+  assert.equal(boxed.price, "9.9");
+  assert.equal(boxed.packSize, "90g");
+  // 者厘粉 is closer to the price than 芒果; joining same-line fragments still keeps the full name.
+  assert.ok(boxed.productName.includes("者厘粉"));
+  assert.ok(boxed.productName.includes("羅拔臣"));
+});
+
 test("decode checks magic bytes and size input", () => {
   const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   const b64 = Buffer.from(bytes).toString("base64");

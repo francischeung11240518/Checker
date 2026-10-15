@@ -147,12 +147,14 @@ function pickPrice(cands) {
 
 const SIZE_UNIT = "ml|mL|ML|kg|KG|g|L|l|毫升|公升|公斤|公克|克|升|粒|片|包|支|罐|盒|件|裝";
 
-/** CJK name plus a short pack/size (60粒, 500ml, 1.25L, x8, 8包裝). Not a barcode or $price. */
+/** CJK name, optional embedded Latin letters (芒果o者厘粉), plus a short pack/size. Not a barcode or $price. */
 function productSpan(core) {
   const unit = "(?:" + SIZE_UNIT + ")";
   const re = new RegExp(
     "\\d{0,4}\\s*[\\u4e00-\\u9fff](?:" +
       "[\\u4e00-\\u9fff]" +
+      "|[A-Za-z]" +
+      "|\\s+(?=[\\u4e00-\\u9fffA-Za-z\\d])" +
       "|\\d{1,4}[.,]\\d{1,3}\\s*" + unit +
       "|\\d{1,4}(?![.,]\\d)\\s*" + unit + "?" +
       "|[xX×]\\s*\\d{1,4}" +
@@ -311,7 +313,9 @@ function joinWordText(parts) {
     }
     const prev = s.charAt(s.length - 1);
     const next = part.charAt(0);
-    if (/[\u4e00-\u9fff]/.test(prev) && /[\u4e00-\u9fff]/.test(next)) s += part;
+    const prevName = /[\u4e00-\u9fffA-Za-z]/.test(prev);
+    const nextName = /[\u4e00-\u9fffA-Za-z]/.test(next);
+    if (prevName && nextName) s += part;
     else s += " " + part;
   }
   return s;
