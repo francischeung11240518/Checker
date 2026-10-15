@@ -352,18 +352,81 @@ function boxAnchors(words, priceCand) {
   return anchors;
 }
 
+/** Horizontal gap allowed when stitching same-line name fragments outside the near radius. */
+function nameFragGapOk(a, b) {
+  const g = gapBetween(a, b);
+  const h = Math.max(a.h, b.h, 8);
+  return g.gapX <= h * 3;
+}
+
+function looksLikeNameFrag(desc, priceCand) {
+  const t = String(desc || "").trim();
+  if (!t || isShelfPriceWord(t, priceCand) || isPriceLabel(t)) return false;
+  if (/[\u4e00-\u9fff]/.test(t)) return true;
+  if (/^[A-Za-z]+$/.test(t)) return true;
+  if (packSizesInText(t).length) return true;
+  if (/^\d{1,4}(?:[.,]\d{1,3})?$/.test(t)) return true;
+  if (/^[xX×]$/.test(t)) return true;
+  return false;
+}
+
+function sameItem(a, b) {
+  return a.desc === b.desc
+    && a.rect.x0 === b.rect.x0
+    && a.rect.y0 === b.rect.y0
+    && a.rect.x1 === b.rect.x1
+    && a.rect.y1 === b.rect.y1;
+}
+
+/**
+ * Near-price boxes can miss a brand sitting further left on the same shelf line.
+ * Once a near line is found, pull in contiguous same-line name fragments outside the radius.
+ */
+function expandSameLineNameItems(nearItems, allItems, priceCand) {
+  if (!nearItems || !nearItems.length) return nearItems || [];
+  const seed = nearItems[0].rect;
+  const line = [];
+  for (let i = 0; i < allItems.length; i++) {
+    const item = allItems[i];
+    if (!sameLine(seed, item.rect)) continue;
+    if (!looksLikeNameFrag(item.desc, priceCand)) continue;
+    line.push(item);
+  }
+  line.sort(function (a, b) { return a.rect.x0 - b.rect.x0; });
+  if (!line.length) return nearItems.slice();
+
+  let left = -1;
+  let right = -1;
+  for (let i = 0; i < line.length; i++) {
+    for (let j = 0; j < nearItems.length; j++) {
+      if (!sameItem(line[i], nearItems[j])) continue;
+      if (left < 0) left = i;
+      right = i;
+      break;
+    }
+  }
+  if (left < 0) return nearItems.slice();
+
+  while (left > 0 && nameFragGapOk(line[left - 1].rect, line[left].rect)) left -= 1;
+  while (right + 1 < line.length && nameFragGapOk(line[right].rect, line[right + 1].rect)) right += 1;
+  return line.slice(left, right + 1);
+}
+
 /** Among word boxes next to the chosen price or a nearby 價 label, the most Chinese characters win. */
 function productNameNearBoxes(words, priceCand) {
   if (!words || !words.length) return "";
   const anchors = boxAnchors(words, priceCand);
   if (!anchors.length) return "";
-  const items = [];
+  const allItems = [];
+  const nearItems = [];
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     const desc = String(word && word.description || "").trim();
     if (!desc || isShelfPriceWord(desc, priceCand) || isPriceLabel(desc)) continue;
     const rect = rectFromPoly(word && word.boundingPoly);
     if (!rect) continue;
+    const item = { desc: desc, rect: rect, dist: Infinity };
+    allItems.push(item);
     let dist = Infinity;
     for (let a = 0; a < anchors.length; a++) {
       if (!isNearRect(anchors[a], rect)) continue;
@@ -371,16 +434,17 @@ function productNameNearBoxes(words, priceCand) {
       if (d < dist) dist = d;
     }
     if (dist === Infinity) continue;
-    items.push({ desc: desc, rect: rect, dist: dist });
+    item.dist = dist;
+    nearItems.push(item);
   }
-  if (!items.length) return "";
-  items.sort(function (a, b) {
+  if (!nearItems.length) return "";
+  nearItems.sort(function (a, b) {
     if (a.rect.y0 !== b.rect.y0) return a.rect.y0 - b.rect.y0;
     return a.rect.x0 - b.rect.x0;
   });
   const lines = [];
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
+  for (let i = 0; i < nearItems.length; i++) {
+    const item = nearItems[i];
     let line = null;
     for (let j = 0; j < lines.length; j++) {
       if (sameLine(lines[j].seed, item.rect)) {
@@ -399,9 +463,10 @@ function productNameNearBoxes(words, priceCand) {
   let bestCjk = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    line.items.sort(function (a, b) { return a.rect.x0 - b.rect.x0; });
+    const expanded = expandSameLineNameItems(line.items, allItems, priceCand);
+    expanded.sort(function (a, b) { return a.rect.x0 - b.rect.x0; });
     const parts = [];
-    for (let j = 0; j < line.items.length; j++) parts.push(line.items[j].desc);
+    for (let j = 0; j < expanded.length; j++) parts.push(expanded[j].desc);
     const name = usableName(joinWordText(parts));
     const cjk = cjkCount(name);
     if (!name || !preferMostCjk(cjk, line.dist, bestCjk, bestDist)) continue;

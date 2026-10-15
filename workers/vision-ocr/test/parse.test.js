@@ -447,6 +447,29 @@ test("keeps embedded Latin letters in a shelf-tag product name", () => {
   assert.ok(boxed.productName.includes("羅拔臣"));
 });
 
+test("same-line brand left of the near-price hit still joins into the product name", () => {
+  // Price far enough that 羅拔臣 sits outside isNearRect, while 芒果o者厘粉 stay inside.
+  const full = "羅拔臣芒果o者厘粉";
+  const text = full + "\n$9.9\n90g";
+  const parsed = parseVisionResponse({
+    responses: [{
+      fullTextAnnotation: { text: text },
+      textAnnotations: [
+        { description: text },
+        { description: "羅拔臣", boundingPoly: box(10, 700, 90, 36) },
+        { description: "芒果", boundingPoly: box(100, 700, 60, 36) },
+        { description: "o", boundingPoly: box(160, 708, 14, 24) },
+        { description: "者厘粉", boundingPoly: box(174, 700, 90, 36) },
+        { description: "$9.9", boundingPoly: box(400, 690, 90, 56) },
+        { description: "90g", boundingPoly: box(400, 760, 50, 28) },
+      ],
+    }],
+  });
+  assert.equal(parsed.productName, full);
+  assert.equal(parsed.price, "9.9");
+  assert.equal(parsed.packSize, "90g");
+});
+
 test("decode checks magic bytes and size input", () => {
   const bytes = Uint8Array.from([0xff, 0xd8, 0xff, 0x00, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
   const b64 = Buffer.from(bytes).toString("base64");
