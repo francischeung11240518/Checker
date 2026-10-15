@@ -600,7 +600,7 @@ async function triggerOcr(request, env, id, fetchImpl, now, origin) {
   try {
     const init = {
       method: "POST",
-      redirect: "error",
+      redirect: "follow",
       signal: ctrl.signal,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

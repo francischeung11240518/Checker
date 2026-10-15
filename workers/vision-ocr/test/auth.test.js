@@ -55,8 +55,10 @@ test("service account token is cached", async () => {
     publicKeyEncoding: { type: "spki", format: "pem" },
   });
   let calls = 0;
-  const fetchImpl = async function () {
+  const fetchCalls = [];
+  const fetchImpl = async function (url, init) {
     calls += 1;
+    fetchCalls.push({ url: String(url), init: init });
     return new Response(JSON.stringify({ access_token: "ya29.test-token", expires_in: 3600 }), { status: 200 });
   };
   const env = {
@@ -71,5 +73,7 @@ test("service account token is cached", async () => {
   assert.equal(first.headers.authorization, "Bearer ya29.test-token");
   assert.equal(second.headers.authorization, "Bearer ya29.test-token");
   assert.equal(calls, 1);
+  assert.equal(fetchCalls[0].init.redirect, "follow");
+  assert.match(fetchCalls[0].url, /oauth2\.googleapis\.com\/token$/);
   assert.equal(first.headers["x-goog-api-key"], undefined);
 });

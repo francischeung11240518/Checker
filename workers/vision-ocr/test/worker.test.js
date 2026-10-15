@@ -160,7 +160,7 @@ test("successful call returns name and price and does not log the image", async 
     assert.equal(sent.requests[0].features[0].type, "DOCUMENT_TEXT_DETECTION");
     assert.deepEqual(sent.requests[0].imageContext.languageHints, ["zh-Hant", "en"]);
     assert.equal(calls[0].init.headers["x-goog-api-key"], "test-key-not-real");
-    assert.equal(calls[0].init.redirect, "error");
+    assert.equal(calls[0].init.redirect, "follow");
     const logText = logs.lines.join("\n");
     assert.doesNotMatch(logText, /imageBase64|紫花油|test-key-not-real/);
     assert.match(logText, /"ok":true/);

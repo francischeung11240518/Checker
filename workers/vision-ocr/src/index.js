@@ -173,7 +173,7 @@ async function callVision(env, base64, fetchImpl) {
   try {
     const res = await fetchImpl(VISION_URL, {
       method: "POST",
-      redirect: "error",
+      redirect: "follow",
       signal: ctrl.signal,
       headers: Object.assign({ "content-type": "application/json" }, auth.headers),
       body: JSON.stringify({

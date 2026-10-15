@@ -366,6 +366,7 @@ test("ocr prefill calls checker-vision-ocr and does not call Google directly", a
   assert.equal(res.status, 200);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://checker-vision-ocr.example.workers.dev/ocr");
+  assert.equal(calls[0].init.redirect, "follow");
   assert.equal(String(calls[0].url).includes("vision.googleapis.com"), false);
   const sent = JSON.parse(calls[0].init.body);
   assert.equal(sent.consent, true);
@@ -382,10 +383,12 @@ test("ocr prefill calls checker-vision-ocr and does not call Google directly", a
 });
 
 test("production ocr uses the service binding and skips the public workers.dev fetch", async () => {
+  const bindingRequests = [];
   const env = baseEnv({
     VISION_OCR_URL: "https://checker-vision-ocr.example.workers.dev/",
     VISION_OCR: {
       async fetch(request) {
+        bindingRequests.push(request);
         const sent = await request.json();
         return new Response(JSON.stringify({
           ok: true,
@@ -412,6 +415,8 @@ test("production ocr uses the service binding and skips the public workers.dev f
   const body = await res.json();
   assert.equal(res.status, 200);
   assert.equal(publicFetches, 0);
+  assert.equal(bindingRequests.length, 1);
+  assert.equal(bindingRequests[0].redirect, "follow");
   assert.equal(body.ocrViaBinding, true);
   assert.equal(body.item.productName, "維他奶");
   assert.equal(body.item.price, "8.5");
