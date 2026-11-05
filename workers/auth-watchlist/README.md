@@ -47,7 +47,7 @@ GitHub Pages 靜態站唔可以保管鑰。登入同追蹤名單放喺呢個 Wor
 ## Francis：Google 登入
 
 1. 開一個 GCP 專案（或用現有嘅）。
-2. 設定 OAuth 同意畫面。未公開之前可以用 External 加測試用戶。
+2. OAuth 同意畫面用 External，加測試用戶就得；公開之前唔使轉正式。
 3. 建立 **OAuth 2.0 Client ID**，類型係 **Web application**。
 4. **Authorized JavaScript origins** 加：
    - `https://francischeung11240518.github.io`
@@ -74,6 +74,8 @@ GitHub Pages 靜態站唔可以保管鑰。登入同追蹤名單放喺呢個 Wor
 Apple 可以隱藏電郵，名多數只喺第一次登入先俾。頁面容許冇顯示名／電郵。
 
 ## Cloudflare 部署（呢份 PR 唔會真係跑）
+
+用 Francis 而家 Checker Workers 嗰個 Cloudflare 帳號（同 photo-upload、vision-ocr 同一個）。
 
 ```bash
 cd workers/auth-watchlist
@@ -136,8 +138,13 @@ Google 同 Apple 即使 `sub` 一樣，都係兩行 `users`（`UNIQUE(provider, 
 
 ## 測試
 
+`npm test` 要 **Node.js 22 或更新**。`worker.test.js` 用內建 `node:sqlite` 做 D1 替身，Node 22 先有。`package.json` 嘅 `engines.node` 係 `>=22`。
+
+編號正規化（`test/codes.test.js`）同頁面測試（倉庫根 `node --test test/auth-watchlist-page.test.js`）唔用 `node:sqlite`。有內建 test runner 嘅較舊 Node（18+）仍然可以單獨跑過。
+
 ```bash
 cd workers/auth-watchlist
 npm test
+node --test test/codes.test.js
 node --test ../../test/auth-watchlist-page.test.js
 ```
