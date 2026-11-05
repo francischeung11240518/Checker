@@ -700,6 +700,63 @@
     padding: 0.4rem 0.15rem 0;
     font-size: 0.8rem;
   }
+  .jumps { margin: 0.35rem 0 1rem; }
+  .jumps h2 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 0.2rem;
+    letter-spacing: -0.02em;
+  }
+  .jump-count { color: var(--muted); font-weight: 550; font-size: 0.92rem; }
+  .jumps .note { margin-bottom: 0.55rem; }
+  button.jump {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.35rem 0.75rem;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 0.7rem 0.85rem;
+    margin: 0 0 0.45rem;
+    cursor: pointer;
+  }
+  button.jump.up { background: #fff6f3; border-color: #e7b2a8; }
+  button.jump.down { background: #f3faf5; border-color: #b7ddc2; }
+  button.jump:focus { outline: 3px solid #f0c36a; }
+  .jump-name { flex: 1 1 12rem; min-width: 0; }
+  .jump .brand { font-size: 0.82rem; }
+  .jump .pname { margin: 0.05rem 0 0; font-size: 1.02rem; }
+  .jump-side { flex: none; text-align: right; }
+  .jump-shop { display: block; color: var(--muted); font-size: 0.82rem; margin-bottom: 0.12rem; }
+  .jump-px {
+    font-variant-numeric: tabular-nums;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+  .jump.up .jump-px { color: var(--red); }
+  .jump.down .jump-px { color: var(--green); }
+  .jump-px .dir {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 0.05rem 0.42rem;
+    margin-right: 0.2rem;
+  }
+  .jump.up .dir { background: #f8d7d0; color: var(--red); }
+  .jump.down .dir { background: #d7efe1; color: var(--green); }
+  .jump-px .was { color: var(--muted); font-weight: 550; }
+  .jump-px .now { font-weight: 750; }
+  @media (max-width: 760px) {
+    button.jump { padding: 0.65rem 0.75rem; }
+    .jump-side { width: 100%; text-align: left; }
+  }
 </style>
 </head>
 <body>
@@ -731,6 +788,11 @@
   <div class="search">
     <input id="q" type="text" lang="zh-HK" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="打產品名" aria-label="搜尋產品">
   </div>
+  <section id="jumps" class="jumps" hidden aria-labelledby="jumpsTitle">
+    <h2 id="jumpsTitle">今日大幅變動<span id="jumpCount" class="jump-count"></span></h2>
+    <p class="note" id="jumpNote"></p>
+    <div id="jumpList"></div>
+  </section>
   <div id="subcats" class="subcats" hidden></div>
   <div id="out"><p class="hint">撳左邊種類、品牌或超市睇產品，或者打產品名搜尋。手機撳「瀏覽分類」由左邊揀；有細類要再揀一層，揀到最後先收埋。撳產品可以睇價格走勢。</p></div>
 
@@ -2231,6 +2293,7 @@ function closeDetail(fromPop) {
       }
     } catch (e) {}
   }
+  syncJumps();
 }
 
 function redrawChart() {
@@ -2336,6 +2399,7 @@ function openDetail(code, fromPop) {
 
   out.hidden = true;
   detail.hidden = false;
+  syncJumps();
   detail.scrollIntoView({ block: "start" });
 }
 
@@ -2839,6 +2903,7 @@ function render(query) {
   const q = query.trim();
   if (!q) {
     renderCategory();
+    syncJumps();
     return;
   }
   const sub = document.getElementById("subcats");
@@ -2856,12 +2921,14 @@ function render(query) {
   const res = searchQuery(q, 200);
   if (!res.results.length) {
     box.innerHTML = '<p class="miss">搵唔到</p>';
+    syncJumps();
     return;
   }
   const shown = res.results.length;
   const total = res.total || shown;
   const more = total > shown ? "，先顯示 " + shown + " 款" : "";
   box.innerHTML = '<p class="count">搵到 ' + total + " 款" + more + "</p>" + cardsHtml(res.results);
+  syncJumps();
 }
 
 function isMobileSide() {
@@ -2907,8 +2974,124 @@ function closeSideDrawer() {
   document.body.classList.remove("side-open");
 }
 
+// Latest-day shelf moves for the same product + retailer. Ratio >= 1.5 (up at
+// least 50%) or <= 0.67 (down to about 67% or less) versus the previous SERIES
+// date. Biggest drops first (lowest ratio); largest rises last. Computed from
+// SERIES on load, so a daily replace_const of SERIES / DATA refreshes the list.
+// ZTORE is skipped. Listed cents only, not estimated offers.
+function periodCovering(rows, di, lastDi) {
+  let hit = null;
+  if (!rows) return null;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const end = row[1] < 0 ? lastDi : row[1];
+    if (di >= row[0] && di <= end) hit = row;
+  }
+  return hit;
+}
+
+function computeTodayJumps() {
+  const dates = (SERIES && SERIES.dates) || [];
+  const lastDi = dates.length - 1;
+  if (lastDi < 1 || !SERIES || !SERIES.series) return [];
+  const prevDi = lastDi - 1;
+  const byKey = new Map();
+  for (const p of PRODUCTS) {
+    byKey.set(p.code, p);
+    const key = resolveSeriesKey(p.code);
+    if (key) byKey.set(key, p);
+  }
+  const out = [];
+  const src = SERIES.series;
+  for (const code of Object.keys(src)) {
+    const rec = src[code];
+    if (!rec) continue;
+    for (const rc of Object.keys(rec)) {
+      if (String(rc).toUpperCase() === "ZTORE") continue;
+      const rows = rec[rc];
+      const neuRow = periodCovering(rows, lastDi, lastDi);
+      const oldRow = periodCovering(rows, prevDi, lastDi);
+      if (!neuRow || !oldRow) continue;
+      const neu = neuRow[2];
+      const old = oldRow[2];
+      if (!(old > 0) || !(neu > 0) || neu === old) continue;
+      if (!(neu * 100 >= old * 150 || neu * 100 <= old * 67)) continue;
+      const product = byKey.get(code) || null;
+      const ratio = neu / old;
+      out.push({
+        code: product ? product.code : code,
+        rc: rc,
+        old: old / 100,
+        neu: neu / 100,
+        ratio: ratio,
+        up: neu > old,
+        name: product ? (product.name_zh || code) : code,
+        brand: product ? brandLine(product) : "",
+      });
+    }
+  }
+  out.sort((a, b) => a.ratio - b.ratio || String(a.name).localeCompare(String(b.name), "zh-Hant") || String(a.rc).localeCompare(String(b.rc)));
+  return out;
+}
+
+let TODAY_JUMPS = [];
+
+function renderTodayJumps() {
+  TODAY_JUMPS = computeTodayJumps();
+  const list = document.getElementById("jumpList");
+  const note = document.getElementById("jumpNote");
+  const count = document.getElementById("jumpCount");
+  if (!list) return;
+  if (!TODAY_JUMPS.length) {
+    list.innerHTML = "";
+    if (note) note.textContent = "";
+    if (count) count.textContent = "";
+    return;
+  }
+  const date = (SERIES.dates && SERIES.dates[SERIES.dates.length - 1]) || "";
+  if (note) {
+    note.textContent = (date ? date + " " : "")
+      + "同前一日比較，價錢升至少五成，或者跌到大約六成七或以下。可能係促銷。撳一行睇走勢。";
+  }
+  if (count) count.textContent = "（" + TODAY_JUMPS.length + "）";
+  list.innerHTML = TODAY_JUMPS.map((item) => {
+    const cls = item.up ? "up" : "down";
+    const dir = item.up ? "升" : "跌";
+    const shop = retailerName(item.rc);
+    const label = (item.brand ? item.brand + " " : "") + item.name + "，" + shop + "，" + dir + " " + money(item.old) + " 到 " + money(item.neu);
+    const brandHtml = item.brand ? '<span class="brand">' + escapeHtml(item.brand) + "</span>" : "";
+    return '<button type="button" class="jump ' + cls + '" data-code="' + escapeHtml(item.code) + '" aria-label="' + escapeHtml(label) + '">'
+      + '<span class="jump-name">' + brandHtml
+      + '<span class="pname">' + escapeHtml(item.name) + "</span></span>"
+      + '<span class="jump-side"><span class="jump-shop">' + escapeHtml(shop) + "</span>"
+      + '<span class="jump-px"><span class="dir">' + dir + '</span> <span class="was">' + escapeHtml(money(item.old)) + '</span> → <span class="now">' + escapeHtml(money(item.neu)) + "</span></span></span>"
+      + "</button>";
+  }).join("");
+}
+
+function syncJumps() {
+  const box = document.getElementById("jumps");
+  if (!box) return;
+  const detail = document.getElementById("detail");
+  const q = document.getElementById("q");
+  const browsing = !!(activeCat1 || activeBrand || activeShop);
+  const searching = !!(q && q.value.trim());
+  const inDetail = !!(detail && !detail.hidden);
+  box.hidden = !TODAY_JUMPS.length || inDetail || searching || browsing;
+}
+
 function boot() {
   const input = document.getElementById("q");
+  renderTodayJumps();
+  syncJumps();
+  const jumpBox = document.getElementById("jumps");
+  if (jumpBox) {
+    jumpBox.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button[data-code]");
+      if (!btn) return;
+      openDetail(btn.getAttribute("data-code"));
+    });
+  }
   const openBtn = document.getElementById("openSide");
   const closeBtn = document.getElementById("closeSide");
   const backdrop = document.getElementById("sideBackdrop");
