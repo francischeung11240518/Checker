@@ -29,3 +29,9 @@
 用家先揀超市（清單未有可以自己加），再影價牌上傳。管理員再睇相、可選雲端預填，然後通過或拒絕。搜尋頁未有入口。用家頁唔會喺手機認字。未有登入，拒絕亦未會通知。
 
 說明：[`docs/photo-upload-internal-pilot.md`](docs/photo-upload-internal-pilot.md)。Worker：[`workers/photo-upload/README.md`](workers/photo-upload/README.md)。
+
+## 登入同個人追蹤（預設關閉）
+
+搜尋、今日大幅變動、詳情唔使登入。登入只係記住一份追蹤名單（Google 同 Apple，兩個登入係兩個帳戶）。Worker 預設關閉，未有秘密同 OAuth 設定之前頁面唔會顯示登入掣。
+
+說明：[`workers/auth-watchlist/README.md`](workers/auth-watchlist/README.md)。
