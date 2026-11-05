@@ -2976,8 +2976,9 @@ function closeSideDrawer() {
 
 // Latest-day shelf moves for the same product + retailer. Ratio >= 1.5 (up at
 // least 50%) or <= 0.67 (down to about 67% or less) versus the previous SERIES
-// date. Computed from SERIES on load, so a daily replace_const of SERIES / DATA
-// refreshes the list. ZTORE is skipped. Listed cents only, not estimated offers.
+// date. Biggest drops first (lowest ratio); largest rises last. Computed from
+// SERIES on load, so a daily replace_const of SERIES / DATA refreshes the list.
+// ZTORE is skipped. Listed cents only, not estimated offers.
 function periodCovering(rows, di, lastDi) {
   let hit = null;
   if (!rows) return null;
@@ -3022,14 +3023,14 @@ function computeTodayJumps() {
         rc: rc,
         old: old / 100,
         neu: neu / 100,
-        mag: Math.abs(ratio - 1),
+        ratio: ratio,
         up: neu > old,
         name: product ? (product.name_zh || code) : code,
         brand: product ? brandLine(product) : "",
       });
     }
   }
-  out.sort((a, b) => b.mag - a.mag || String(a.name).localeCompare(String(b.name), "zh-Hant") || String(a.rc).localeCompare(String(b.rc)));
+  out.sort((a, b) => a.ratio - b.ratio || String(a.name).localeCompare(String(b.name), "zh-Hant") || String(a.rc).localeCompare(String(b.rc)));
   return out;
 }
 
