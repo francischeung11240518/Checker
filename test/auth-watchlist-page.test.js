@@ -77,4 +77,8 @@ test("search page wires login and watchlist without secrets", () => {
   assert.equal(client.includes("SESSION_SECRET"), false);
   assert.equal(client.includes("BEGIN PRIVATE KEY"), false);
   assert.equal(index.includes("upload.html"), false);
+  const search = index.indexOf('id="q"');
+  const watch = index.indexOf('id="watchlist"');
+  const jumps = index.indexOf('id="jumps"');
+  assert.ok(search > 0 && search < watch && watch < jumps);
 });
