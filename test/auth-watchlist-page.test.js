@@ -60,10 +60,13 @@ test("search page wires login and watchlist without secrets", () => {
   assert.match(index, /id="watchlist"/);
   assert.match(index, /加入追蹤/);
   assert.match(index, /我的追蹤/);
-  assert.match(index, /用 Apple 繼續/);
+  assert.match(index, /用 Google 繼續/);
   assert.match(index, /id="privacyNote"/);
-  assert.match(index, /兩個帳戶/);
+  assert.match(index, /第一版只用 Google/);
   assert.match(index, /資料保留期未定/);
+  assert.equal(index.includes("id=\"appleBtn\""), false);
+  assert.equal(index.includes("用 Apple 繼續"), false);
+  assert.equal(index.includes("appleid.cdn-apple.com"), false);
   assert.equal(index.includes("原價"), false);
   assert.equal(client.includes("原價"), false);
   assert.equal(index.includes("SESSION_SECRET"), false);

@@ -809,11 +809,6 @@
   }
   .login-panel p { margin: 0.2rem 0 0.45rem; }
   .login-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem; }
-  #appleBtn {
-    background: #1c1915;
-    color: #fffdf8;
-    border-color: #1c1915;
-  }
   #googleBtn { min-height: 2.4rem; }
   .card-actions { margin-top: 0.45rem; }
   .card-actions:empty { display: none; }
@@ -872,13 +867,13 @@
     </div>
   </div>
 </div>
-<p id="privacyNote" class="privacy" hidden>登入只係記住你嘅追蹤名單。會存登入來源（Google 或 Apple）同供應商用戶編號；有提供先存電郵同顯示名。唔會存價錢。用 Google 同用 Apple 會係兩個帳戶，名單唔會合併。第一版未有刪除帳戶。資料保留期未定，之後同 Legal 再定。呢段係說明，唔係法律意見。</p>
+<p id="privacyNote" class="privacy" hidden>登入只係記住你嘅追蹤名單。第一版只用 Google。會存登入來源同供應商用戶編號；有提供先存電郵同顯示名。唔會存價錢。第一版未有刪除帳戶。資料保留期未定，之後同 Legal 再定。呢段係說明，唔係法律意見。</p>
+<!-- TODO: Sign in with Apple can be added when a paid Apple Developer account exists. v1 is Google only. -->
 <div id="loginPanel" class="login-panel" hidden>
-  <p>用 Google 或 Apple 登入。未有密碼帳戶。兩個登入係兩個帳戶，名單唔會合併。</p>
+  <p>用 Google 登入。未有密碼帳戶。</p>
   <div class="login-actions">
     <p class="now-head" id="googleLabel">用 Google 繼續</p>
     <div id="googleBtn"></div>
-    <button type="button" id="appleBtn">用 Apple 繼續</button>
     <p id="loginError" class="note"></p>
     <button type="button" id="loginClose">關閉</button>
   </div>
@@ -3536,44 +3531,6 @@ async function ensureGoogleButton() {
   }
 }
 
-async function startApple() {
-  const err = document.getElementById("loginError");
-  const id = authState.config && authState.config.appleServicesId;
-  const redirect = authState.config && authState.config.appleRedirectUri;
-  if (!id || !redirect) {
-    if (err) err.textContent = "Apple 登入未設定。";
-    return;
-  }
-  try {
-    await loadAuthScript("https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js");
-    if (!window.AppleID || !AppleID.auth) {
-      if (err) err.textContent = "Apple 登入暫時未能使用。";
-      return;
-    }
-    AppleID.auth.init({
-      clientId: id,
-      scope: "name email",
-      redirectURI: redirect,
-      usePopup: true,
-    });
-    const res = await AppleID.auth.signIn();
-    const idToken = res && res.authorization && res.authorization.id_token;
-    let name = "";
-    if (res && res.user && res.user.name) {
-      const person = res.user.name;
-      name = [person.firstName, person.lastName].filter(Boolean).join(" ");
-    }
-    await exchangeLogin("apple", idToken || "", name);
-  } catch (e) {
-    const code = e && (e.error || e.message) ? String(e.error || e.message) : "";
-    if (code === "popup_closed_by_user" || code === "user_cancelled_authorize") {
-      if (err) err.textContent = "";
-      return;
-    }
-    if (err) err.textContent = "Apple 登入未完成。";
-  }
-}
-
 function openLogin() {
   const panel = document.getElementById("loginPanel");
   const err = document.getElementById("loginError");
@@ -3706,8 +3663,6 @@ function bindAuthUi() {
   if (loginOpen) loginOpen.addEventListener("click", openLogin);
   const loginClose = document.getElementById("loginClose");
   if (loginClose) loginClose.addEventListener("click", closeLogin);
-  const appleBtn = document.getElementById("appleBtn");
-  if (appleBtn) appleBtn.addEventListener("click", function () { startApple(); });
   const logoutBtn = document.getElementById("logoutBtn");
   if (logoutBtn) logoutBtn.addEventListener("click", function () { doLogout(); });
   const watchJump = document.getElementById("watchJump");

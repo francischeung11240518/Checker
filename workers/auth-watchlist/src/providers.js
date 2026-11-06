@@ -1,11 +1,9 @@
-/** Verify Google and Apple ID tokens with each issuer's public JWKS. */
+/** Verify a Google ID token with Google's public JWKS. Apple is not wired in v1. */
 
 import { decodeJwt, verifyRs256 } from "./jwt.js";
 
 const GOOGLE_JWKS = "https://www.googleapis.com/oauth2/v3/certs";
-const APPLE_JWKS = "https://appleid.apple.com/auth/keys";
 const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
-const APPLE_ISSUERS = ["https://appleid.apple.com"];
 
 let cache = new Map();
 
@@ -99,16 +97,6 @@ export function verifyGoogleIdToken(idToken, clientId, fetchImpl, nowSeconds) {
     jwksUrl: GOOGLE_JWKS,
     issuers: GOOGLE_ISSUERS,
     audience: String(clientId || "").trim(),
-    fetchImpl: fetchImpl,
-    now: nowSeconds,
-  });
-}
-
-export function verifyAppleIdToken(idToken, servicesId, fetchImpl, nowSeconds) {
-  return verifyWithJwks(idToken, {
-    jwksUrl: APPLE_JWKS,
-    issuers: APPLE_ISSUERS,
-    audience: String(servicesId || "").trim(),
     fetchImpl: fetchImpl,
     now: nowSeconds,
   });

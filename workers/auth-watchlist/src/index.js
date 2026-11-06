@@ -1,12 +1,12 @@
 /**
  * Checker login + personal watchlist.
- * Verifies Google and Apple ID tokens, then issues a short-lived Bearer JWT.
+ * Verifies a Google ID token, then issues a short-lived Bearer JWT.
  * D1 stores the account and product codes only. Prices stay in the Pages bundle.
- * Same person with Google and Apple is two accounts. No password accounts.
- * No delete-account route in v1.
+ * v1 is Google only. provider "apple" is reserved in the schema and rejected here.
+ * No password accounts. No delete-account route in v1.
  */
 import { normalizeProductCode, watchlistMax } from "./codes.js";
-import { cleanName, clearJwksCache, verifyAppleIdToken, verifyGoogleIdToken } from "./providers.js";
+import { clearJwksCache, verifyGoogleIdToken } from "./providers.js";
 import { bearerToken, issueSession, readSession, sessionSecret, sessionTtl } from "./session.js";
 
 export { clearJwksCache };
@@ -18,6 +18,7 @@ const MESSAGES = {
   origin: "來源網址不在允許清單。",
   method: "不支援呢個方法。",
   bad_request: "請求不正確。",
+  apple_disabled: "第一版只支援 Google 登入。",
   bad_token: "登入核實失敗。",
   not_configured: "登入未設定完成。",
   db_unconfigured: "未設定追蹤資料庫。",
@@ -101,22 +102,6 @@ function publicClientId(value) {
   if (!s || s.length > 200) return "";
   if (!/^[A-Za-z0-9._-]+$/.test(s)) return "";
   return s;
-}
-
-function publicRedirect(value) {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  let url;
-  try {
-    url = new URL(raw);
-  } catch (e) {
-    return "";
-  }
-  if (url.username || url.password) return "";
-  if (url.origin === PAGES_ORIGIN) return url.toString();
-  const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-  if (localHost && (url.protocol === "http:" || url.protocol === "https:")) return url.toString();
-  return "";
 }
 
 function dbReady(env) {
@@ -220,8 +205,7 @@ function health(env, origin) {
     service: "checker-auth-watchlist",
     enabled: killSwitchEnabled(env && env.AUTH_ENABLED),
     googleClientId: publicClientId(env && env.GOOGLE_CLIENT_ID),
-    appleServicesId: publicClientId(env && env.APPLE_SERVICES_ID),
-    appleRedirectUri: publicRedirect(env && env.APPLE_REDIRECT_URI),
+    providers: ["google"],
     maxItems: watchlistMax(env),
     sessionTtlSeconds: sessionTtl(env),
     db: dbReady(env),
@@ -229,31 +213,22 @@ function health(env, origin) {
 }
 
 async function login(request, env, origin, now, fetchImpl) {
+  const parsed = await readJson(request);
+  if (parsed.error) return fail(parsed.error, 400, origin, { op: "login" });
+  // TODO: Sign in with Apple when a paid Apple Developer account exists.
+  if (parsed.body.provider === "apple") {
+    return fail("apple_disabled", 400, origin, { op: "login", provider: "apple" });
+  }
+  if (parsed.body.provider !== "google") return fail("bad_request", 400, origin, { op: "login" });
   if (!dbReady(env)) return fail("db_unconfigured", 503, origin, { op: "login" });
   const secret = sessionSecret(env);
   if (!secret) return fail("not_configured", 503, origin, { op: "login" });
-  const parsed = await readJson(request);
-  if (parsed.error) return fail(parsed.error, 400, origin, { op: "login" });
-  const provider = parsed.body.provider === "apple" ? "apple" : (parsed.body.provider === "google" ? "google" : "");
-  if (!provider) return fail("bad_request", 400, origin, { op: "login" });
+  const provider = "google";
   const idToken = typeof parsed.body.idToken === "string" ? parsed.body.idToken : "";
-  let identity;
-  if (provider === "google") {
-    identity = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID, fetchImpl, now);
-  } else {
-    identity = await verifyAppleIdToken(idToken, env.APPLE_SERVICES_ID, fetchImpl, now);
-  }
+  const identity = await verifyGoogleIdToken(idToken, env.GOOGLE_CLIENT_ID, fetchImpl, now);
   if (!identity.ok) {
     const status = identity.error === "not_configured" ? 503 : (identity.error === "upstream" ? 502 : 401);
     return fail(identity.error, status, origin, { op: "login", provider: provider });
-  }
-  if (provider === "apple" && !identity.name) {
-    identity = {
-      ok: true,
-      sub: identity.sub,
-      email: identity.email,
-      name: cleanName(parsed.body.name),
-    };
   }
   let user;
   try {

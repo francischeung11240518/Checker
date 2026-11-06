@@ -104,6 +104,7 @@
       const chars = Array.from(local);
       return chars.length > 4 ? chars.slice(0, 4).join("") + "…" : local;
     }
+    // Reserved for a later Apple login. v1 never creates this provider.
     if (user && user.provider === "apple") return "Apple 用家";
     return "Google 用家";
   }

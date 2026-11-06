@@ -2,6 +2,7 @@
 -- Prices are NOT stored here. The browser computes them from the Pages bundle.
 -- Retention period is not decided. This is a placeholder until Legal sets one.
 -- Do not invent a purge window in code.
+-- provider 'apple' is reserved for a later paid Apple Developer login. v1 rejects it.
 
 CREATE TABLE users (
   id TEXT PRIMARY KEY,

@@ -9,7 +9,6 @@ const PAGES = "https://francischeung11240518.github.io";
 const NOW = new Date("2026-11-05T02:00:00.000Z");
 const NOW_SEC = Math.floor(NOW.getTime() / 1000);
 const GOOGLE_ID = "test-google-client.apps.googleusercontent.com";
-const APPLE_ID = "com.example.checker.web";
 const SECRET = "test-session-secret-not-real-0123456789";
 
 const migrationSql = fs.readFileSync(new URL("../migrations/0001_init.sql", import.meta.url), "utf8");
@@ -45,8 +44,6 @@ function baseEnv(over) {
   return Object.assign({
     AUTH_ENABLED: "true",
     GOOGLE_CLIENT_ID: GOOGLE_ID,
-    APPLE_SERVICES_ID: APPLE_ID,
-    APPLE_REDIRECT_URI: "https://francischeung11240518.github.io/Checker/",
     WATCHLIST_MAX: "50",
     SESSION_TTL_SECONDS: "604800",
     SESSION_SECRET: SECRET,
@@ -58,7 +55,7 @@ function jwksFetch(publicJwk, calls) {
   return async function (url) {
     const u = String(url);
     if (calls) calls.push(u);
-    if (u !== "https://www.googleapis.com/oauth2/v3/certs" && u !== "https://appleid.apple.com/auth/keys") {
+    if (u !== "https://www.googleapis.com/oauth2/v3/certs") {
       throw new Error("unexpected " + u);
     }
     return new Response(JSON.stringify({ keys: [publicJwk] }), {
@@ -112,7 +109,7 @@ function googleClaims(over) {
 function appleClaims(over) {
   return Object.assign({
     iss: "https://appleid.apple.com",
-    aud: APPLE_ID,
+    aud: "com.example.checker.web",
     sub: "apple-sub-1",
     exp: NOW_SEC + 3600,
     iat: NOW_SEC,
@@ -157,7 +154,7 @@ test("migration creates users, watchlist, and sessions", () => {
   assert.match(migrationSql, /Retention period is not decided/);
 });
 
-test("auth flag off returns 403 and does not call Google or Apple", async () => {
+test("auth flag off returns 403 and does not call Google", async () => {
   clearJwksCache();
   const calls = [];
   const env = baseEnv({ AUTH_ENABLED: "false" });
@@ -191,6 +188,8 @@ test("auth flag off returns 403 and does not call Google or Apple", async () => 
   assert.equal(healthBody.service, "checker-auth-watchlist");
   assert.equal(JSON.stringify(healthBody).includes(SECRET), false);
   assert.equal(healthBody.googleClientId, GOOGLE_ID);
+  assert.deepEqual(healthBody.providers, ["google"]);
+  assert.equal(healthBody.appleServicesId, undefined);
 });
 
 test("wrangler kill switch defaults off and does not embed a secret", () => {
@@ -300,16 +299,6 @@ test("login, add, list, remove, and a second provider stay separate", async () =
   const after = await handleRequest(req("/watchlist", { headers: auth }), env, { now: NOW });
   assert.deepEqual((await after.json()).codes.map(function (row) { return row.code; }), ["P00001864"]);
 
-  const apple = await login(env, "apple", appleClaims({ sub: "google-sub-1" }), { name: "蘋果 用家" });
-  assert.equal(apple.res.status, 200);
-  assert.equal(apple.json.user.provider, "apple");
-  assert.notEqual(apple.json.user.id, google.json.user.id);
-  assert.equal(apple.json.user.name, "蘋果 用家");
-  const appleList = await handleRequest(req("/watchlist", {
-    headers: { authorization: "Bearer " + apple.json.token },
-  }), env, { now: NOW });
-  assert.deepEqual((await appleList.json()).codes, []);
-
   const bye = await handleRequest(req("/logout", {
     method: "POST",
     headers: { authorization: "Bearer " + google.json.token },
@@ -368,7 +357,25 @@ test("watchlist stops at 50 items", async () => {
   assert.equal(freedBody.count, 50);
 });
 
-test("bad, expired, and cross-provider tokens are rejected", async () => {
+test("apple login is rejected and does not call Apple", async () => {
+  clearJwksCache();
+  const calls = [];
+  const env = baseEnv();
+  const res = await handleRequest(req("/session", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: { provider: "apple", idToken: "not-verified", name: "蘋果 用家" },
+  }), env, { fetch: jwksFetch(publicJwk, calls), now: NOW });
+  const body = await res.json();
+  assert.equal(res.status, 400);
+  assert.equal(body.error, "apple_disabled");
+  assert.match(body.message, /Google/);
+  assert.equal(calls.length, 0);
+  const users = await env.DB.prepare("SELECT COUNT(*) AS n FROM users").bind().first();
+  assert.equal(Number(users.n), 0);
+});
+
+test("bad and expired Google tokens are rejected", async () => {
   clearJwksCache();
   const env = baseEnv();
   const missing = await handleRequest(req("/watchlist"), env, { now: NOW });
