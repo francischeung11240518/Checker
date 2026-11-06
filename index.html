@@ -700,8 +700,8 @@
     padding: 0.4rem 0.15rem 0;
     font-size: 0.8rem;
   }
-  .jumps { margin: 0.35rem 0 1rem; }
-  .jumps h2 {
+  .jumps, .watchlist { margin: 0.35rem 0 1rem; }
+  .jumps h2, .watchlist h2 {
     font-size: 1.15rem;
     font-weight: 700;
     margin: 0 0 0.2rem;
@@ -884,16 +884,16 @@
   <div class="search">
     <input id="q" type="text" lang="zh-HK" inputmode="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="打產品名" aria-label="搜尋產品">
   </div>
-  <section id="jumps" class="jumps" hidden aria-labelledby="jumpsTitle">
-    <h2 id="jumpsTitle">今日大幅變動<span id="jumpCount" class="jump-count"></span></h2>
-    <p class="note" id="jumpNote"></p>
-    <div id="jumpList"></div>
-  </section>
   <section id="watchlist" class="watchlist" hidden aria-labelledby="watchTitle">
     <h2 id="watchTitle">我的追蹤<span id="watchCount" class="jump-count"></span></h2>
     <p class="note">名單跟住帳戶。最新價同歷史高低用呢版已有嘅價錢，唔係即時報價。較前一日用升、跌或者差不多講。</p>
     <p id="watchWarn" class="note"></p>
     <div id="watchList"></div>
+  </section>
+  <section id="jumps" class="jumps" hidden aria-labelledby="jumpsTitle">
+    <h2 id="jumpsTitle">今日大幅變動<span id="jumpCount" class="jump-count"></span></h2>
+    <p class="note" id="jumpNote"></p>
+    <div id="jumpList"></div>
   </section>
   <div id="subcats" class="subcats" hidden></div>
   <div id="out"><p class="hint">撳左邊種類、品牌或超市睇產品，或者打產品名搜尋。手機撳「瀏覽分類」由左邊揀；有細類要再揀一層，揀到最後先收埋。撳產品可以睇價格走勢。</p></div>
