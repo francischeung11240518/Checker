@@ -1,5 +1,5 @@
 /* Login + personal watchlist client.
-   The Worker URL stays empty until Francis pastes the deployed workers.dev host.
+   AUTH_WORKER_URL is the deployed workers.dev host (public, no trailing slash).
    Session is a Bearer token in localStorage, not a cross-site cookie.
    This file does not embed OAuth client secrets. */
 (function (root, factory) {
@@ -9,8 +9,8 @@
 })(typeof window !== "undefined" ? window : null, function () {
   const URL_KEY = "checker-auth-worker-url";
   const TOKEN_KEY = "checker-auth-token";
-  /** Paste the deployed host after `wrangler deploy`. Leave empty until then. */
-  const AUTH_WORKER_URL = "";
+  /** Deployed workers.dev host. Public. No trailing slash. */
+  const AUTH_WORKER_URL = "https://checker-auth-watchlist.checker-francis.workers.dev";
   const ORPHAN_LABEL = "暫時未有／已唔再提供";
   const P_CODE = /^[Pp](\d{1,12})$/;
   const DIGIT_CODE = /^(\d{4,12})$/;

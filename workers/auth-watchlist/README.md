@@ -2,9 +2,9 @@
 
 GitHub Pages 靜態站唔可以保管鑰。登入同追蹤名單放喺呢個 Worker（`*.workers.dev`）。瀏覽器用 **Authorization: Bearer** 短命 JWT，**唔用**跨站 cookie（Safari／ITP 會擋 `github.io` → `workers.dev` 嘅第三方 cookie）。
 
-預設 `AUTH_ENABLED=false`。未有 D1、`SESSION_SECRET`、Google client 之前，登入同追蹤 API 回 **403**。搜尋頁唔使登入都用到。第一版只用 Google。
+`AUTH_ENABLED` 仍然係 `"false"`（kill switch 未開）。登入同追蹤 API 回 **403** `auth_disabled`。搜尋頁唔使登入都用到，登入掣亦唔會顯示。第一版只用 Google。
 
-呢份 PR **唔會**部署，亦 **唔會**填真 OAuth client id。
+Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`。公開 Google client id 同 D1 `database_id` 已寫入 `wrangler.toml`。`SESSION_SECRET` 只可以 `wrangler secret put`，唔好 commit。未將 `AUTH_ENABLED` 改做 `"true"` 之前，登入保持關閉。
 
 ## 第一版做咩／唔做咩
 
@@ -16,12 +16,12 @@ GitHub Pages 靜態站唔可以保管鑰。登入同追蹤名單放喺呢個 Wor
 
 ## 環境變數
 
-`wrangler.toml` 嘅 `[vars]`（唔係秘密，可以入 git；而家 client id 留空）：
+`wrangler.toml` 嘅 `[vars]`（唔係秘密，可以入 git；公開 client id 已填，`AUTH_ENABLED` 仍然係 `"false"`）：
 
 | 變數 | 預設 | 作用 |
 |---|---|---|
 | `AUTH_ENABLED` | `false` | Kill switch。只有 `true`／`on`／`1`／`yes` 先接受登入同追蹤。其他值，`POST /session`、`GET/POST/DELETE /watchlist`、`POST /logout` 全部 **403** `auth_disabled`。`GET /` 仍然 200，方便頁面知道未開放。 |
-| `GOOGLE_CLIENT_ID` | 空 | Google OAuth **Web** client id（公開）。唔好發明假 id。 |
+| `GOOGLE_CLIENT_ID` | `175392803528-9840t8fvs62gur5sa5p9immqkpkid3k6.apps.googleusercontent.com` | Google OAuth **Web** client id（公開，已寫入 `wrangler.toml`）。唔好把 client secret 寫入 git。 |
 | `WATCHLIST_MAX` | `50` | 每人上限。程式會夾死喺 50，調高都唔會超過。 |
 | `SESSION_TTL_SECONDS` | `604800` | Bearer JWT 壽命，預設 7 日。短過 5 分鐘會跌返預設；最長 14 日。登出會喺 D1 撤銷呢張 token。 |
 
@@ -52,40 +52,25 @@ GitHub Pages 靜態站唔可以保管鑰。登入同追蹤名單放喺呢個 Wor
 
 Francis（2026-11-06）決定而家唔做。正式 Sign in with Apple 要**付費** Apple Developer Program；免費 Apple ID 唔夠。`users.provider` 仍然可以係 `apple`，但 `POST /session` 對 `"provider": "apple"` 回 **400** `apple_disabled`，唔會核實 Apple token。頁面亦冇「用 Apple 繼續」。
 
-## Cloudflare 部署（呢份 PR 唔會真係跑）
+## Cloudflare 部署
 
 用 Francis 而家 Checker Workers 嗰個 Cloudflare 帳號（同 photo-upload、vision-ocr 同一個）。
 
-```bash
-cd workers/auth-watchlist
-npm test
-npx wrangler d1 create checker-auth-watchlist
-```
+Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`。
 
-將返回嘅 `database_id` 寫入 `wrangler.toml`（而家係 `replace_before_deploy`）。未綁定 `DB` 時，旗標開咗都會拒絕登入。
+`wrangler.toml` 已有 D1 名稱 `checker-auth-watchlist`、`database_id` `2ddb2690-d53c-48a7-949d-8118b8fe6762`，同公開 `GOOGLE_CLIENT_ID`。倉庫根目錄 `auth-watchlist.js` 嘅 `AUTH_WORKER_URL` 已係上面條網址（無尾斜線）。
 
-```bash
-npx wrangler d1 migrations apply checker-auth-watchlist --remote
-npx wrangler secret put SESSION_SECRET
-# 確認 AUTH_ENABLED 仍然係 "false"，client id 可以先留空
-npx wrangler deploy
-```
+**Kill switch 未開。** `AUTH_ENABLED` 必須保持 `"false"`。旗標未開，登入同追蹤 API 回 **403**，搜尋頁唔顯示登入掣。秘密（包括 `SESSION_SECRET`）只用 `npx wrangler secret put`，唔好 commit。
 
-部署完會有一條 `https://checker-auth-watchlist.<你的子網域>.workers.dev`。唔好估子網域。
+開登入係之後另一步：確認 secret 已放，將 `AUTH_ENABLED` 改做 `"true"`，再 `npx wrangler deploy`。呢步而家唔做。
 
-然後先至：
-
-1. 填好 `GOOGLE_CLIENT_ID`。
-2. 將 `AUTH_ENABLED` 改做 `"true"`，再 `npx wrangler deploy` 一次。
-3. 將上面條 workers.dev 網址寫入倉庫根目錄 `auth-watchlist.js` 嘅 `AUTH_WORKER_URL`（公開位址，唔係秘密），推上 Pages。未寫之前，搜尋頁唔顯示登入掣。
-
-私人試、未改檔：
+預設已經指向已部署嘅 Worker。私人試另一條網址先至要改：
 
 ```js
 localStorage.setItem("checker-auth-worker-url", "https://checker-auth-watchlist.<子網域>.workers.dev")
 ```
 
-或者開 `?authUrl=https://….workers.dev`（只限呢次，唔寫入 localStorage）。只接受 `https://*.workers.dev` 或本機 `localhost`／`127.0.0.1`。
+或者開 `?authUrl=https://….workers.dev`（只限呢次，唔寫入 localStorage）。只接受 `https://*.workers.dev` 或本機 `localhost`／`127.0.0.1`。查詢同 localStorage 會蓋過 `AUTH_WORKER_URL`。
 
 `GET /` 回 `enabled`、公開 Google client id、`providers: ["google"]`、`maxItems`。唔回 secret。
 

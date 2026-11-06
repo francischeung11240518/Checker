@@ -2,12 +2,12 @@ name = "checker-auth-watchlist"
 main = "src/index.js"
 compatibility_date = "2026-10-13"
 
-# Kill switch stays off until D1, SESSION_SECRET, and the Google client id exist.
+# Kill switch stays off. AUTH_ENABLED must remain "false" until auth is turned on.
 # Do not put secrets in this file.
 # Sign in with Apple is not in v1 (paid Apple Developer required). Do not add Apple vars yet.
 [vars]
 AUTH_ENABLED = "false"
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "175392803528-9840t8fvs62gur5sa5p9immqkpkid3k6.apps.googleusercontent.com"
 WATCHLIST_MAX = "50"
 SESSION_TTL_SECONDS = "604800"
 
@@ -16,10 +16,9 @@ SESSION_TTL_SECONDS = "604800"
 # ID-token verification uses Google's public keys. v1 does not read:
 #   GOOGLE_CLIENT_SECRET
 
-# Create with: npx wrangler d1 create checker-auth-watchlist
-# Paste the returned database_id over replace_before_deploy before deploy.
+# D1 checker-auth-watchlist. database_id is the public binding id, not a secret.
 [[d1_databases]]
 binding = "DB"
 database_name = "checker-auth-watchlist"
-database_id = "replace_before_deploy"
+database_id = "2ddb2690-d53c-48a7-949d-8118b8fe6762"
 migrations_dir = "migrations"
