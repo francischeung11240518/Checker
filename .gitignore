@@ -1,0 +1,4 @@
+.dev.vars
+*.p8
+node_modules/
+.wrangler/

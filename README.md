@@ -30,8 +30,8 @@
 
 說明：[`docs/photo-upload-internal-pilot.md`](docs/photo-upload-internal-pilot.md)。Worker：[`workers/photo-upload/README.md`](workers/photo-upload/README.md)。
 
-## 登入同個人追蹤（預設關閉）
+## 登入同個人追蹤（已部署 Worker 已開）
 
-搜尋、今日大幅變動、詳情唔使登入。登入只係記住一份追蹤名單（第一版只用 Google）。Worker 已部署，公開 client id、D1 id 同 workers.dev 網址已寫入，但 `AUTH_ENABLED` 仍然係 `"false"`。旗標未開，搜尋頁唔會顯示登入掣。
+搜尋、今日大幅變動、詳情唔使登入。登入只係記住一份追蹤名單（第一版只用 Google）。已部署 Worker `https://checker-auth-watchlist.checker-francis.workers.dev` 的 `AUTH_ENABLED` 係 `"true"`。健康檢查係 `GET /`（唔係 `/health`）。搜尋頁喺 Worker 回 `enabled: true` 先顯示登入掣同追蹤介面。
 
 說明：[`workers/auth-watchlist/README.md`](workers/auth-watchlist/README.md)。
