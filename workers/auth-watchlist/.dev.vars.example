@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `npx wrangler dev`. Never commit .dev.vars.
+# These values are local placeholders, not production secrets.
+# Leave AUTH_ENABLED false until SESSION_SECRET and GOOGLE_CLIENT_ID exist.
+# Sign in with Apple is not in v1.
+AUTH_ENABLED=false
+SESSION_SECRET=
+GOOGLE_CLIENT_ID=
