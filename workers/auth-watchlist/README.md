@@ -2,9 +2,9 @@
 
 GitHub Pages 靜態站唔可以保管鑰。登入同追蹤名單放喺呢個 Worker（`*.workers.dev`）。瀏覽器用 **Authorization: Bearer** 短命 JWT，**唔用**跨站 cookie（Safari／ITP 會擋 `github.io` → `workers.dev` 嘅第三方 cookie）。
 
-`AUTH_ENABLED` 仍然係 `"false"`（kill switch 未開）。登入同追蹤 API 回 **403** `auth_disabled`。搜尋頁唔使登入都用到，登入掣亦唔會顯示。第一版只用 Google。
+已部署 Worker 的 `AUTH_ENABLED` 係 `"true"`（kill switch 已開）。健康檢查係 `GET /`（唔係 `/health`），回 `enabled: true`。搜尋頁唔使登入都用到；登入掣同追蹤介面喺 Worker 回 `enabled: true` 先顯示。第一版只用 Google。
 
-Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`。公開 Google client id 同 D1 `database_id` 已寫入 `wrangler.toml`。`SESSION_SECRET` 只可以 `wrangler secret put`，唔好 commit。未將 `AUTH_ENABLED` 改做 `"true"` 之前，登入保持關閉。
+Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`。公開 Google client id 同 D1 `database_id` 已寫入 `wrangler.toml`。`SESSION_SECRET` 只可以 `wrangler secret put`，唔好 commit。
 
 ## 第一版做咩／唔做咩
 
@@ -16,11 +16,11 @@ Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`�
 
 ## 環境變數
 
-`wrangler.toml` 嘅 `[vars]`（唔係秘密，可以入 git；公開 client id 已填，`AUTH_ENABLED` 仍然係 `"false"`）：
+`wrangler.toml` 嘅 `[vars]`（唔係秘密，可以入 git；公開 client id 已填，已部署 Worker 的 `AUTH_ENABLED` 係 `"true"`）：
 
-| 變數 | 預設 | 作用 |
+| 變數 | 而家 | 作用 |
 |---|---|---|
-| `AUTH_ENABLED` | `false` | Kill switch。只有 `true`／`on`／`1`／`yes` 先接受登入同追蹤。其他值，`POST /session`、`GET/POST/DELETE /watchlist`、`POST /logout` 全部 **403** `auth_disabled`。`GET /` 仍然 200，方便頁面知道未開放。 |
+| `AUTH_ENABLED` | `true` | Kill switch。已部署 Worker 已開。只有 `true`／`on`／`1`／`yes` 先接受登入同追蹤。其他值，`POST /session`、`GET/POST/DELETE /watchlist`、`POST /logout` 全部 **403** `auth_disabled`。健康檢查係 `GET /`（唔係 `/health`），關閉都仍然 200，方便頁面知道未開放。 |
 | `GOOGLE_CLIENT_ID` | `175392803528-9840t8fvs62gur5sa5p9immqkpkid3k6.apps.googleusercontent.com` | Google OAuth **Web** client id（公開，已寫入 `wrangler.toml`）。唔好把 client secret 寫入 git。 |
 | `WATCHLIST_MAX` | `50` | 每人上限。程式會夾死喺 50，調高都唔會超過。 |
 | `SESSION_TTL_SECONDS` | `604800` | Bearer JWT 壽命，預設 7 日。短過 5 分鐘會跌返預設；最長 14 日。登出會喺 D1 撤銷呢張 token。 |
@@ -29,7 +29,7 @@ Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`�
 
 | 名 | 何時要 |
 |---|---|
-| `SESSION_SECRET` | **開旗標之前一定要有。** 用嚟簽自己嘅 Bearer JWT。建議 `openssl rand -base64 32`。至少 16 個字元。 |
+| `SESSION_SECRET` | 用嚟簽自己嘅 Bearer JWT。至少 16 個字元。唔好 commit。 |
 
 第一版核實嘅係 Google **ID token**（簽章、`aud`、`iss`、過期），用 Google 公開 JWKS，**唔使** client secret。
 
@@ -60,9 +60,7 @@ Worker 已部署：`https://checker-auth-watchlist.checker-francis.workers.dev`�
 
 `wrangler.toml` 已有 D1 名稱 `checker-auth-watchlist`、`database_id` `2ddb2690-d53c-48a7-949d-8118b8fe6762`，同公開 `GOOGLE_CLIENT_ID`。倉庫根目錄 `auth-watchlist.js` 嘅 `AUTH_WORKER_URL` 已係上面條網址（無尾斜線）。
 
-**Kill switch 未開。** `AUTH_ENABLED` 必須保持 `"false"`。旗標未開，登入同追蹤 API 回 **403**，搜尋頁唔顯示登入掣。秘密（包括 `SESSION_SECRET`）只用 `npx wrangler secret put`，唔好 commit。
-
-開登入係之後另一步：確認 secret 已放，將 `AUTH_ENABLED` 改做 `"true"`，再 `npx wrangler deploy`。呢步而家唔做。
+**Kill switch 已開。** 已部署 Worker 的 `AUTH_ENABLED` 係 `"true"`。健康檢查係 `GET /`（唔係 `/health`）。搜尋頁喺 Worker 回 `enabled: true` 先顯示登入掣同追蹤介面。秘密（包括 `SESSION_SECRET`）只用 `npx wrangler secret put`，唔好 commit。
 
 預設已經指向已部署嘅 Worker。私人試另一條網址先至要改：
 
@@ -80,7 +78,7 @@ CORS 只放行 `https://francischeung11240518.github.io` 同 `http(s)://localhos
 
 | 方法 | 路徑 | 說明 |
 |---|---|---|
-| `GET` | `/` | 狀態。旗標關閉都係 200。 |
+| `GET` | `/` | 健康檢查（唔係 `/health`）。回 `enabled`。旗標關閉都係 200。 |
 | `POST` | `/session` | `{ "provider": "google", "idToken": "..." }`。成功回 `token`（Bearer）同 `user`。`apple` 回 400。 |
 | `GET` | `/session` | 要 Bearer。回而家嘅用戶。 |
 | `POST` | `/logout` | 要 Bearer。撤銷呢張 token。瀏覽器都要清 localStorage。 |
