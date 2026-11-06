@@ -195,7 +195,9 @@ test("auth flag off returns 403 and does not call Google", async () => {
 test("wrangler kill switch defaults off and does not embed a secret", () => {
   const toml = fs.readFileSync(new URL("../wrangler.toml", import.meta.url), "utf8");
   assert.match(toml, /AUTH_ENABLED = "false"/);
-  assert.match(toml, /database_id = "replace_before_deploy"/);
+  assert.match(toml, /database_id = "2ddb2690-d53c-48a7-949d-8118b8fe6762"/);
+  assert.match(toml, /GOOGLE_CLIENT_ID = "175392803528-9840t8fvs62gur5sa5p9immqkpkid3k6\.apps\.googleusercontent\.com"/);
+  assert.equal(toml.includes('AUTH_ENABLED = "true"'), false);
   assert.equal(toml.includes(SECRET), false);
   assert.equal(toml.includes("BEGIN PRIVATE KEY"), false);
   assert.match(toml, /SESSION_SECRET/);

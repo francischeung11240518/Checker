@@ -32,6 +32,6 @@
 
 ## 登入同個人追蹤（預設關閉）
 
-搜尋、今日大幅變動、詳情唔使登入。登入只係記住一份追蹤名單（第一版只用 Google）。Worker 預設關閉，未有秘密同 OAuth 設定之前頁面唔會顯示登入掣。
+搜尋、今日大幅變動、詳情唔使登入。登入只係記住一份追蹤名單（第一版只用 Google）。Worker 已部署，公開 client id、D1 id 同 workers.dev 網址已寫入，但 `AUTH_ENABLED` 仍然係 `"false"`。旗標未開，搜尋頁唔會顯示登入掣。
 
 說明：[`workers/auth-watchlist/README.md`](workers/auth-watchlist/README.md)。

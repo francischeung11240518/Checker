@@ -33,8 +33,8 @@ test("day-over-day wording stays soft", () => {
   assert.equal(line.includes("原價"), false);
 });
 
-test("worker URL allowlist and empty default", () => {
-  assert.equal(Auth.AUTH_WORKER_URL, "");
+test("worker URL allowlist and deployed host", () => {
+  assert.equal(Auth.AUTH_WORKER_URL, "https://checker-auth-watchlist.checker-francis.workers.dev");
   assert.equal(Auth.isWorkerUrlAllowed("https://checker-auth-watchlist.example.workers.dev/"), true);
   assert.equal(Auth.isWorkerUrlAllowed("http://127.0.0.1:8787/"), true);
   assert.equal(Auth.isWorkerUrlAllowed("http://localhost:8080"), true);
@@ -49,7 +49,11 @@ test("worker URL allowlist and empty default", () => {
     return key === Auth.URL_KEY ? "http://127.0.0.1:8787" : "";
   });
   assert.equal(stored, "http://127.0.0.1:8787");
-  assert.equal(Auth.workerUrlFrom("", function () { return ""; }), "");
+  assert.equal(
+    Auth.workerUrlFrom("", function () { return ""; }),
+    "https://checker-auth-watchlist.checker-francis.workers.dev"
+  );
+  assert.equal(Auth.workerUrlFrom("", function () { return ""; }, ""), "");
 });
 
 test("search page wires login and watchlist without secrets", () => {
